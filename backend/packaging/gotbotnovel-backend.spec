@@ -1,15 +1,25 @@
 # PyInstaller spec used by the desktop CI workflow.
+import sys
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 
+packaging_root = Path(SPECPATH).resolve()
+backend_root = packaging_root.parent
+sys.path.insert(0, str(backend_root))
+
 datas = [
-    ("../alembic", "alembic"),
-    ("../static", "static"),
+    (str(backend_root / "alembic"), "alembic"),
+    (str(backend_root / "alembic-sqlite.ini"), "."),
+    (str(backend_root / "static"), "static"),
 ]
 binaries = []
 hiddenimports = [
     *collect_submodules("app"),
     *collect_submodules("uvicorn"),
+    "aiosqlite",
+    "sqlalchemy.dialects.sqlite.aiosqlite",
 ]
 
 for package in ("chromadb", "sentence_transformers", "transformers", "mcp"):
@@ -20,8 +30,8 @@ for package in ("chromadb", "sentence_transformers", "transformers", "mcp"):
 
 
 analysis = Analysis(
-    ["run_backend.py"],
-    pathex=[".."],
+    [str(packaging_root / "run_backend.py")],
+    pathex=[str(backend_root)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

@@ -33,7 +33,7 @@ jobs:
             electron_script: dist:win
             binary_name: gotbotnovel-backend.exe
             artifact_name: GotBotNovel-windows-x64
-            output_glob: electron/dist/*.exe
+            output_glob: electron/dist/GotBotNovel-windows-x64.*
 
     steps:
       - name: Checkout
@@ -96,6 +96,14 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run ${{ matrix.electron_script }}
+
+      - name: Prepare Windows portable package
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        working-directory: electron
+        run: |
+          Compress-Archive -Path dist/win-unpacked -DestinationPath dist/GotBotNovel-windows-x64.zip -Force
+          Copy-Item dist/win-unpacked/GotBotNovel.exe dist/GotBotNovel-windows-x64.exe -Force
 
       - name: Upload desktop installer
         uses: actions/upload-artifact@v6

@@ -14,9 +14,11 @@ npm ci
 npm run sync
 cd android
 ./gradlew assembleDebug
+# 或构建 GitHub Actions 使用的未签名 Release APK：
+./gradlew assembleRelease
 ```
 
-生成的 APK 位于 `mobile/android/app/build/outputs/apk/debug/`。
+Debug APK 位于 `mobile/android/app/build/outputs/apk/debug/`；未签名 Release APK 位于 `mobile/android/app/build/outputs/apk/release/`。
 
 ## 后端地址
 

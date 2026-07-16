@@ -66,6 +66,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pyinstaller
 
+      - name: Replace PyTorch with CPU-only wheel on Windows
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install --force-reinstall --no-deps torch==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu
+
       - name: Download offline embedding model
         run: |
           python backend/packaging/download_embedding_model.py --model "${{ env.EMBEDDING_MODEL }}" --output electron/resources/embedding_model

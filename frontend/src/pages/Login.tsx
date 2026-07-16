@@ -882,12 +882,12 @@ export default function Login() {
                   >
                     <img
                       src="/logo.svg"
-                      alt="MuMuAINovel"
+                      alt="GotBotNovel"
                       style={{ width: 26, height: 26, filter: 'brightness(0) invert(1)' }}
                     />
                   </div>
                   <Title level={3} style={{ margin: 0, color: token.colorText }}>
-                    MuMuAINovel
+                    GotBotNovel
                   </Title>
                 </Space>
 
@@ -979,7 +979,7 @@ export default function Login() {
                   letterSpacing: 0.4,
                 }}
               >
-                © 2026 MuMuAINovel · GPLv3 License
+                © 2026 GotBotNovel · GPLv3 License
               </Paragraph>
             </section>
           </Col>
@@ -1001,7 +1001,7 @@ export default function Login() {
                     欢迎回来
                   </Title>
                   <Paragraph style={{ marginBottom: 0, color: token.colorTextSecondary }}>
-                    登录 MuMuAINovel，继续你的小说创作项目。
+                    登录 GotBotNovel，继续你的小说创作项目。
                   </Paragraph>
                 </Space>
 

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GotBotNovel</string>
+    <string name="title_activity_main">GotBotNovel</string>
+    <string name="package_name">com.lyuliefeng.gotbotnovel</string>
+    <string name="custom_url_scheme">com.lyuliefeng.gotbotnovel</string>
+</resources>

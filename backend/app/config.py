@@ -14,18 +14,16 @@ DATA_DIR.mkdir(exist_ok=True)
 # 配置模块使用标准logging（在logger.py初始化之前）
 config_logger = logging.getLogger(__name__)
 
-# 数据库配置：PostgreSQL
-# 从环境变量获取数据库URL
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://mumuai:password@localhost:5432/mumuai_novel")
+# 数据库配置：本地默认使用 SQLite，Docker 部署通过环境变量覆盖为 PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/gotbotnovel.db")
 
-config_logger.debug(f"数据库类型: PostgreSQL")
 config_logger.debug(f"数据库URL: {DATABASE_URL}")
 
 class Settings(BaseSettings):
     """应用配置"""
     
     # 应用配置
-    app_name: str = "MuMuAINovel"
+    app_name: str = "GotBotNovel"
     app_version: str = "1.0.0"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
@@ -124,7 +122,7 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = False
     SMTP_USE_SSL: bool = True
     SMTP_FROM_EMAIL: Optional[str] = None
-    SMTP_FROM_NAME: str = "MuMuAINovel"
+    SMTP_FROM_NAME: str = "GotBotNovel"
     EMAIL_AUTH_ENABLED: bool = True
     EMAIL_REGISTER_ENABLED: bool = True
     EMAIL_VERIFICATION_CODE_TTL_MINUTES: int = 10
@@ -132,7 +130,7 @@ class Settings(BaseSettings):
     
     # 提示词工坊配置
     WORKSHOP_MODE: str = "client"  # client: 本地部署实例, server: 云端中央服务器
-    WORKSHOP_CLOUD_URL: str = "https://mumuverse.space:1566"  # 云端服务地址
+    WORKSHOP_CLOUD_URL: str = ""  # 可选云端服务地址，默认不连接外部工坊
     WORKSHOP_API_TIMEOUT: int = 30  # 云端API请求超时时间（秒）
     
     class Config:

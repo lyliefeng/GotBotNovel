@@ -28,6 +28,9 @@ class WorkshopClient:
         user_identifier: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送请求到云端"""
+        if not self.base_url:
+            raise WorkshopClientError("云端提示词工坊未配置")
+
         headers = {
             "X-Instance-ID": INSTANCE_ID,
             "Content-Type": "application/json"

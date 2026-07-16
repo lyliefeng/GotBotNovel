@@ -1,4 +1,4 @@
-# MuMuAINovel 📚✨
+# GotBotNovel 📚✨
 
 <div align="center">
 
@@ -28,42 +28,6 @@
 
 ---
 
-<div align="center">
-
-## 💖 支持项目
-
-如果这个项目对你有帮助，欢迎通过以下方式支持开发：
-
-**[☕ 请我喝杯咖啡](https://mumuverse.space:1588/)**
-
-**[🌐 MuMuのAPI站点](https://api.mumuverse.space/register?aff=4NN8)**
-
-> 在 MuMu の API 站点充值满 50 元及以上，也可以获得下方赞助专属权益。
-
-### 🎁 赞助专属权益
-
-| 权益 | 说明 |
-|------|------|
-| 📋 **优先需求响应** | 您的功能需求和问题反馈将获得优先处理 |
-| 🚀 **Windows一键启动** | 获取免安装 EXE 程序，双击即可使用 |
-| 💬 **专属技术支持** | 加入赞助者内部群，获得远程协助和配置指导 |
-
-### ☕ 赞助 / API 站点充值档位
-
-| 金额 | 描述 |
-|------|------|
-| ¥5 | 🌶️ 一包辣条 |
-| ¥10 | 🍱 一顿拼好饭 |
-| ¥20 | ☕ 一杯咖啡 |
-| ¥50 | 🍖 一次烧烤  |
-| ¥99 | 🍲 一顿海底捞 |
-
-您的支持是我持续开发的动力！🙏
-
-</div>
-
----
-
 ## ✨ 特性
 
 - 🤖 **多 AI 模型** - 支持 OpenAI、Gemini、Claude 等主流模型
@@ -72,8 +36,9 @@
 - 📖 **章节编辑** - 支持创建、编辑、重新生成和润色
 - 🌐 **世界观设定** - 构建完整的故事背景
 - 🔐 **多种登录** - LinuxDO OAuth 或本地账户登录
-- 💾 **PostgreSQL** - 生产级数据库，多用户数据隔离
-- 🐳 **Docker 部署** - 一键启动，开箱即用
+- 💾 **SQLite 默认存储** - 本地无需额外数据库服务
+- 🐘 **PostgreSQL 可选** - 适合多用户部署
+- 🐳 **Docker 部署** - 可从源码构建运行
 
 ## 📸 项目预览
 
@@ -97,11 +62,6 @@
 ![项目管理](images/3.png)
 
 ![项目管理](images/3-1.png)
-
-### 赞助我 💖
-![赞助我](images/4.png)
-
-![赞助我](images/4-1.png)
 
 </div>
 
@@ -173,12 +133,41 @@
 - Docker 和 Docker Compose
 - 至少一个 AI 服务的 API Key（OpenAI/Gemini/Claude）
 
+## 📦 跨平台发行
+
+推送 `v*` 标签后，`.github/workflows/build-artifacts.yml` 会在目标平台上分别构建：
+
+- **Windows x64**：Electron NSIS 安装程序（`.exe`）
+- **macOS arm64**：Electron 磁盘映像（`.dmg`）
+- **Android**：Capacitor 未签名 Release APK（`.apk`）
+- **Linux**：Git 源码归档包（`.tar.gz`）
+
+桌面后端由 PyInstaller 在对应操作系统上构建，不能用 macOS 本机直接交叉生成 Windows 可执行文件。首次构建会把 `paraphrase-multilingual-MiniLM-L12-v2` 模型缓存到桌面资源中，因此构建和发行包都需要额外磁盘空间。
+
+Android 包是前端客户端，需要连接一个正在运行的 GotBotNovel 后端。构建时通过 `GOTBOT_SERVER_URL` 注入后端地址，例如：
+
+```bash
+cd mobile
+GOTBOT_SERVER_URL=https://your-gotbotnovel-server.example npm run sync
+```
+
+未设置该变量时，APK 仍可构建，但只包含静态前端，不能自动获得本地 Python 后端。
+
+### 本地运行后端（SQLite）
+
+```bash
+cd backend
+bash scripts/start-local.sh
+```
+
+启动脚本会创建 `backend/data/gotbotnovel.db`、执行 SQLite migrations，并在 `http://127.0.0.1:8000` 提供服务。
+
 ### Docker Compose 部署（推荐）
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/xiamuceer-j/MuMuAINovel.git
-cd MuMuAINovel
+git clone https://github.com/lyliefeng/GotBotNovel.git
+cd GotBotNovel
 
 # 2. 配置环境变量（必需）
 cp backend/.env.example .env
@@ -202,11 +191,11 @@ docker-compose up -d
 > 2. **数据库初始化**: `init_postgres.sql` 会在首次启动时自动执行，安装必要的PostgreSQL扩展
 > 3. **自行构建**: 如需从源码构建，请先下载 embedding 模型文件（[加群获取](frontend/public/qq.jpg)）
 
-### 使用 Docker Hub 镜像（推荐新手）
+### 从源码构建 Docker 镜像
 
 ```bash
-# 1. 拉取最新镜像（已包含模型文件）
-docker pull mumujie/mumuainovel:latest
+# 1. 构建本地镜像
+docker build -t gotbotnovel:latest .
 
 # 2. 创建 docker-compose.yml（点击下方展开查看完整配置）
 ```
@@ -218,10 +207,10 @@ docker pull mumujie/mumuainovel:latest
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: mumuainovel-postgres
+    container_name: gotbotnovel-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-mumuai_novel}
-      POSTGRES_USER: ${POSTGRES_USER:-mumuai}
+      POSTGRES_DB: ${POSTGRES_DB:-gotbotnovel}
+      POSTGRES_USER: ${POSTGRES_USER:-gotbot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
       TZ: ${TZ:-Asia/Shanghai}
@@ -232,7 +221,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mumuai} -d ${POSTGRES_DB:-mumuai_novel}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gotbot} -d ${POSTGRES_DB:-gotbotnovel}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -266,9 +255,9 @@ services:
       - -c
       - max_wal_size=${POSTGRES_MAX_WAL_SIZE:-4GB}
 
-  mumuainovel:
-    image: mumujie/mumuainovel:latest
-    container_name: mumuainovel
+  gotbotnovel:
+    image: gotbotnovel:latest
+    container_name: gotbotnovel
     depends_on:
       postgres:
         condition: service_healthy
@@ -280,13 +269,13 @@ services:
       - ./storage/generated_covers:/app/backend/storage/generated_covers
     environment:
       # 应用配置
-      - APP_NAME=${APP_NAME:-MuMuAINovel}
+      - APP_NAME=${APP_NAME:-GotBotNovel}
       - APP_VERSION=${APP_VERSION:-1.0.0}
       - APP_HOST=${APP_HOST:-0.0.0.0}
       - APP_PORT=8000
       - DEBUG=${DEBUG:-false}
       # 数据库配置
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-mumuai}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-mumuai_novel}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-gotbot}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-gotbotnovel}
       - DB_HOST=postgres
       - DB_PORT=5432
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-123456}
@@ -360,7 +349,7 @@ docker-compose pull
 docker-compose up -d
 ```
 
-> **💡 提示**: Docker Hub 镜像已包含所有依赖和模型文件，无需额外下载
+> **💡 提示**: 本地镜像包含应用依赖；首次构建时请确保所需模型文件已准备完成。
 
 ### 本地开发 / 从源码构建
 
@@ -389,15 +378,16 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env 填入必要配置
 
-# 启动 PostgreSQL（可使用 Docker）
+# 默认使用 SQLite，无需启动额外数据库服务。
+# 如需 PostgreSQL 部署，可使用 Docker：
 docker run -d --name postgres \
   -e POSTGRES_PASSWORD=your_password \
-  -e POSTGRES_DB=mumuai_novel \
+  -e POSTGRES_DB=gotbotnovel \
   -p 5432:5432 \
   postgres:18-alpine
 
-# 启动后端
-python -m uvicorn app.main:app --host localhost --port 8000 --reload
+# 启动后端（自动执行 SQLite 迁移）
+bash scripts/start-local.sh
 ```
 
 #### 前端
@@ -416,8 +406,9 @@ npm run build  # 生产构建
 创建 `.env` 文件：
 
 ```bash
-# PostgreSQL 数据库（必需）
-DATABASE_URL=postgresql+asyncpg://mumuai:your_password@postgres:5432/mumuai_novel
+# SQLite 数据库（默认）
+DATABASE_URL=sqlite+aiosqlite:///./data/gotbotnovel.db
+# PostgreSQL 部署时再改为 postgresql+asyncpg://...
 POSTGRES_PASSWORD=your_secure_password
 
 # AI 服务
@@ -487,7 +478,7 @@ OPENAI_BASE_URL=https://your-proxy-service.com/v1
   - 初始化脚本: `backend/scripts/init_postgres.sql`（自动挂载）
   - 优化配置: 支持 80-150 并发用户
 
-- **mumuainovel**: 主应用服务
+- **gotbotnovel**: 主应用服务
   - 端口: 8000
   - 日志目录: `./logs`
   - 配置挂载: `.env` 文件
@@ -544,7 +535,7 @@ ports:
 ## 📁 项目结构
 
 ```
-MuMuAINovel/
+GotBotNovel/
 ├── backend/                 # 后端服务
 │   ├── app/
 │   │   ├── api/            # API 路由
@@ -569,7 +560,7 @@ MuMuAINovel/
 
 ## 🛠️ 技术栈
 
-**后端**: FastAPI • PostgreSQL • SQLAlchemy • OpenAI/Claude/Gemini SDK
+**后端**: FastAPI • SQLite/PostgreSQL • SQLAlchemy • OpenAI/Claude/Gemini SDK
 
 **前端**: React 18 • TypeScript • Ant Design • Zustand • Vite
 
@@ -599,8 +590,8 @@ MuMuAINovel/
 
 感谢所有为本项目做出贡献的开发者！
 
-<a href="https://github.com/xiamuceer-j/MuMuAINovel/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=xiamuceer-j/MuMuAINovel" />
+<a href="https://github.com/lyliefeng/GotBotNovel/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lyliefeng/GotBotNovel" />
 </a>
 
 ## 📝 许可证
@@ -623,7 +614,7 @@ MuMuAINovel/
 
 ## 📧 联系方式
 
-- 提交 [Issue](https://github.com/xiamuceer-j/MuMuAINovel/issues)
+- 提交 [Issue](https://github.com/lyliefeng/GotBotNovel/issues)
 - Linux DO [讨论](https://linux.do/t/topic/1106333)
 - 加入QQ群 [QQ群](frontend/public/qq.jpg)
 - 加入WX群 [WX群](frontend/public/WX.png)
@@ -640,11 +631,11 @@ Made with ❤️
 
 ## Star History
 
-<a href="https://www.star-history.com/#xiamuceer-j/MuMuAINovel&type=date&legend=top-left">
+<a href="https://www.star-history.com/#lyliefeng/GotBotNovel&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=xiamuceer-j/MuMuAINovel&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=xiamuceer-j/MuMuAINovel&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=xiamuceer-j/MuMuAINovel&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lyliefeng/GotBotNovel&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=lyliefeng/GotBotNovel&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=lyliefeng/GotBotNovel&type=date&legend=top-left" />
  </picture>
 </a>
 

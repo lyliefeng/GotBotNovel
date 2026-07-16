@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
+import os
 
 from app.config import settings as config_settings
 from app.database import close_db, _session_stats
@@ -202,7 +203,7 @@ app.include_router(book_import.router, prefix="/api")  # 拆书导入API
 app.include_router(tasks.router, prefix="/api")  # 后台任务API
 app.include_router(announcements.router, prefix="/api")  # 公告API
 
-static_dir = Path(__file__).parent.parent / "static"
+static_dir = Path(os.getenv("GOTBOT_STATIC_DIR", Path(__file__).parent.parent / "static"))
 generated_assets_root_dir = Path(__file__).parent.parent / "storage"
 generated_covers_dir = generated_assets_root_dir / "generated_covers"
 generated_covers_dir.mkdir(parents=True, exist_ok=True)
@@ -247,7 +248,7 @@ else:
     @app.get("/")
     async def root():
         return {
-            "message": "欢迎使用MuMuAINovel",
+            "message": "欢迎使用GotBotNovel",
             "version": config_settings.app_version,
             "docs": "/docs",
             "notice": "请先构建前端: cd frontend && npm run build"

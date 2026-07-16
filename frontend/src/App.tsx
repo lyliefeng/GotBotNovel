@@ -22,7 +22,6 @@ import UserManagement from './pages/UserManagement';
 import PromptTemplates from './pages/PromptTemplates';
 import SkillChat from './pages/SkillChat';
 import SkillManage from './pages/SkillManage';
-import Sponsor from './pages/Sponsor';
 // import Polish from './pages/Polish';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
@@ -56,7 +55,7 @@ function App() {
           <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/chapters/:chapterId/reader" element={<ProtectedRoute><ChapterReader /></ProtectedRoute>} />
           <Route path="/project/:projectId" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>}>
-            <Route index element={<Navigate to="sponsor" replace />} />
+            <Route index element={<Navigate to="world-setting" replace />} />
             <Route path="world-setting" element={<WorldSetting />} />
             <Route path="careers" element={<Careers />} />
             <Route path="outline" element={<Outline />} />
@@ -71,7 +70,6 @@ function App() {
             <Route path="prompt-workshop" element={<PromptWorkshop />} />
             <Route path="skill-chat" element={<SkillChat />} />
             <Route path="skill-manage" element={<SkillManage />} />
-            <Route path="sponsor" element={<Sponsor />} />
             {/* <Route path="polish" element={<Polish />} /> */}
           </Route>
         </Routes>

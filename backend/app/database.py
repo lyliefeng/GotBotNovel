@@ -1,4 +1,4 @@
-"""数据库连接和会话管理 - PostgreSQL 多用户数据隔离"""
+"""数据库连接和会话管理 - 多用户数据隔离"""
 import asyncio
 from typing import Dict, Any
 from datetime import datetime
@@ -46,7 +46,7 @@ _session_stats = {
 async def get_engine(user_id: str):
     """获取或创建用户专属的数据库引擎（线程安全）
     
-    PostgreSQL: 所有用户共享一个数据库，通过user_id字段隔离数据
+    PostgreSQL/SQLite: 所有用户共享一个数据库，通过user_id字段隔离数据
     
     Args:
         user_id: 用户ID
@@ -54,8 +54,8 @@ async def get_engine(user_id: str):
     Returns:
         用户专属的异步引擎
     """
-    # PostgreSQL模式：所有用户共享同一个引擎
-    cache_key = "shared_postgres"
+    # 所有用户共享同一个引擎，数据通过 user_id 隔离
+    cache_key = "shared_database"
     if cache_key in _engine_cache:
         return _engine_cache[cache_key]
     

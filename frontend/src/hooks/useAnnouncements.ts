@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { announcementApi } from '../services/api';
 import type { Announcement } from '../types';
 
-const READ_IDS_KEY = 'mumu_announcements_read_ids';
-const LAST_SYNC_KEY = 'mumu_announcements_last_sync_at';
-const CACHE_ITEMS_KEY = 'mumu_announcements_cached_items';
-const LAST_FULL_SYNC_KEY = 'mumu_announcements_last_full_sync_at';
+const READ_IDS_KEY = 'gotbotnovel_announcements_read_ids';
+const LAST_SYNC_KEY = 'gotbotnovel_announcements_last_sync_at';
+const CACHE_ITEMS_KEY = 'gotbotnovel_announcements_cached_items';
+const LAST_FULL_SYNC_KEY = 'gotbotnovel_announcements_last_full_sync_at';
 const DEFAULT_SYNC_INTERVAL = 5 * 60 * 1000;
 const FULL_SYNC_INTERVAL = 60 * 60 * 1000;
 

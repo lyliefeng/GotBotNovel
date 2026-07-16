@@ -22,7 +22,7 @@ def require_login(request: Request):
 # GitHub API配置
 GITHUB_API_BASE = "https://api.github.com"
 REPO_OWNER = "xiamuceer-j"
-REPO_NAME = "MuMuAINovel"
+REPO_NAME = "GotBotNovel"
 
 # 缓存配置
 _cache = {
@@ -88,7 +88,7 @@ async def fetch_github_commits(page: int = 1, per_page: int = 30) -> List[dict]:
     
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "MuMuAINovel-App"
+        "User-Agent": "GotBotNovel-App"
     }
     
     try:

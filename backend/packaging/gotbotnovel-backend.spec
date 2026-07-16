@@ -3,8 +3,8 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 
 datas = [
-    ("backend/alembic", "alembic"),
-    ("backend/static", "static"),
+    ("../alembic", "alembic"),
+    ("../static", "static"),
 ]
 binaries = []
 hiddenimports = [
@@ -20,8 +20,8 @@ for package in ("chromadb", "sentence_transformers", "transformers", "mcp"):
 
 
 analysis = Analysis(
-    ["backend/packaging/run_backend.py"],
-    pathex=["backend"],
+    ["run_backend.py"],
+    pathex=[".."],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

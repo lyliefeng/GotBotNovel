@@ -28,6 +28,7 @@ function backendEnvironment() {
   return {
     ...process.env,
     APP_NAME,
+    APP_VERSION: app.getVersion(),
     APP_HOST: BACKEND_HOST,
     APP_PORT: String(BACKEND_PORT),
     DATABASE_URL: `sqlite+aiosqlite:///${path.join(dataDir, 'gotbotnovel.db')}`,

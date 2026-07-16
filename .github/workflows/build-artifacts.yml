@@ -67,10 +67,8 @@ jobs:
           python -m pip install -r backend/requirements.txt pyinstaller
 
       - name: Download offline embedding model
-        env:
-          SENTENCE_TRANSFORMERS_HOME: ${{ github.workspace }}/electron/resources/embedding_onnx
         run: |
-          python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${{ env.EMBEDDING_MODEL }}', cache_folder=r'${{ github.workspace }}/electron/resources/embedding_onnx', device='cpu')"
+          python backend/packaging/download_embedding_model.py --model "${{ env.EMBEDDING_MODEL }}" --output electron/resources/embedding_model
 
       - name: Build backend executable
         run: |

@@ -36,8 +36,8 @@
         ]
       },
       {
-        "from": "resources/embedding_onnx",
-        "to": "embedding_onnx",
+        "from": "resources/embedding_model",
+        "to": "embedding_model",
         "filter": [
           "**/*"
         ]

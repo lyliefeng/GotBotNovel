@@ -6,11 +6,11 @@
 - 打包模式优先启动 `resources/backend_bin/gotbotnovel-backend`；
 - 后端健康检查通过后，窗口加载 FastAPI 托管的前端；
 - SQLite 数据放在 Electron 的用户数据目录，不写入应用包；
-- `resources/embedding_onnx/` 是后续 ONNX 模型产物目录。
+- `resources/embedding_model/` 是桌面包内直接展开、无符号链接的离线 embedding 模型目录。
 
 ## 当前状态
 
-Electron 依赖和后端可执行文件尚未在本阶段构建，因此目前只提交壳的启动逻辑和打包配置。生成可分发 `.app/.dmg` 前，还需要完成 ONNX embedding 适配、PyInstaller 构建和 Electron 依赖安装验证。
+Electron 打包工作流会下载 embedding 模型、构建 PyInstaller 后端，并生成可分发的 `.dmg` 或 Windows 安装程序。模型使用直接路径加载，桌面运行不依赖联网下载模型。
 
 ## 开发运行
 

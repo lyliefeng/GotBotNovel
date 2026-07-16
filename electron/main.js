@@ -31,9 +31,10 @@ function backendEnvironment() {
     APP_HOST: BACKEND_HOST,
     APP_PORT: String(BACKEND_PORT),
     DATABASE_URL: `sqlite+aiosqlite:///${path.join(dataDir, 'gotbotnovel.db')}`,
-    ONNX_EMBEDDING_DIR: packagedResource('embedding_onnx'),
+    ONNX_EMBEDDING_DIR: packagedResource('embedding_model'),
     GOTBOT_STATIC_DIR: packagedResource('static'),
-    SENTENCE_TRANSFORMERS_HOME: packagedResource('embedding_onnx'),
+    GOTBOT_EMBEDDING_MODEL_DIR: packagedResource('embedding_model'),
+    SENTENCE_TRANSFORMERS_HOME: packagedResource('embedding_model'),
     TRANSFORMERS_OFFLINE: '1',
     HF_HUB_OFFLINE: '1',
   };

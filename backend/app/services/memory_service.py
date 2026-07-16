@@ -165,8 +165,27 @@ class MemoryService:
                     except Exception as e:
                         logger.warning(f"⚠️ 检查快照失败: {e}")
                 
-                # 优先尝试从本地路径加载
-                if has_valid_model:
+                # Electron 桌面包将模型直接展开到 resources/embedding_model，
+                # 不使用 Hugging Face 的 cache/snapshot 链接结构，避免 Windows
+                # 打包时 7-Zip 将缓存链接路径误判为目录。
+                direct_model_dir = os.environ.get('GOTBOT_EMBEDDING_MODEL_DIR')
+
+                # 优先尝试从直接展开的本地模型目录加载
+                if direct_model_dir:
+                    direct_model_path = Path(direct_model_dir).expanduser().resolve()
+                    if not direct_model_path.is_dir():
+                        raise FileNotFoundError(
+                            f"GOTBOT_EMBEDDING_MODEL_DIR 不存在: {direct_model_path}"
+                        )
+                    logger.info(f"✅ 使用直接展开的本地Embedding模型: {direct_model_path}")
+                    self.embedding_model = SentenceTransformer(
+                        str(direct_model_path),
+                        device='cpu',
+                        trust_remote_code=True,
+                        local_files_only=True
+                    )
+                    logger.info("✅ Embedding模型加载成功 (直接路径离线模式)")
+                elif has_valid_model:
                     logger.info(f"✅ 检测到完整本地模型，使用离线模式加载")
                     try:
                         self.embedding_model = SentenceTransformer(
@@ -972,4 +991,3 @@ class MemoryService:
 
 # 创建全局实例
 memory_service = MemoryService()
-            

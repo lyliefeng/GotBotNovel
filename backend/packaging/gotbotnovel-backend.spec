@@ -35,8 +35,6 @@ pyz = PYZ(analysis.pure)
 exe = EXE(
     pyz,
     analysis.scripts,
-    analysis.binaries,
-    analysis.datas,
     [],
     name="gotbotnovel-backend",
     debug=False,
@@ -44,4 +42,13 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
+    exclude_binaries=True,
+)
+coll = COLLECT(
+    exe,
+    analysis.binaries,
+    analysis.datas,
+    strip=False,
+    upx=False,
+    name="gotbotnovel-backend",
 )

@@ -9,6 +9,21 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 
+RUNTIME_FILES = [
+    "1_Pooling/config.json",
+    "config.json",
+    "config_sentence_transformers.json",
+    "model.safetensors",
+    "modules.json",
+    "sentence_bert_config.json",
+    "sentencepiece.bpe.model",
+    "special_tokens_map.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "unigram.json",
+]
+
+
 def replace_symlinks(root: Path) -> None:
     """Replace any links left by the Hub cache with regular files/directories."""
     for path in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
@@ -36,6 +51,7 @@ def main() -> None:
         args.model,
         local_dir=args.output,
         local_dir_use_symlinks=False,
+        allow_patterns=RUNTIME_FILES,
     )
 
     # local_dir may contain Hub bookkeeping that is not needed at runtime.

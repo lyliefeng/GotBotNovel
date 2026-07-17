@@ -4,11 +4,16 @@
   "private": true,
   "description": "GotBotNovel cross-platform desktop application",
   "main": "main.js",
+  "gotbotUpdate": {
+    "giteeApiBase": "https://gitee.com/api/v5",
+    "giteeOwner": "lyliefeng",
+    "giteeRepo": "GotBotNovel"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
     "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac dmg --arm64",
+    "dist:mac": "electron-builder --mac dmg zip --arm64",
     "dist:win": "electron-builder --win nsis --x64"
   },
   "devDependencies": {
@@ -24,6 +29,7 @@
     },
     "files": [
       "main.js",
+      "updater.js",
       "preload.js",
       "package.json"
     ],
@@ -52,7 +58,8 @@
     ],
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "category": "public.app-category.productivity",
       "extendInfo": {
@@ -87,6 +94,15 @@
         "width": 640,
         "height": 520
       }
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "http://127.0.0.1:8000/api/desktop-updates"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

@@ -3,15 +3,19 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const packageMetadata = require('./package.json');
+const { configureAutoUpdates } = require('./updater');
 
 const APP_NAME = 'GotBotNovel';
 const BACKEND_PORT = Number(process.env.GOTBOT_BACKEND_PORT || 8000);
 const BACKEND_HOST = process.env.GOTBOT_BACKEND_HOST || '127.0.0.1';
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 const HEALTH_TIMEOUT_MS = Number(process.env.GOTBOT_HEALTH_TIMEOUT_MS || 90_000);
+const UPDATE_CONFIG = packageMetadata.gotbotUpdate || {};
 
 let mainWindow = null;
 let backendProcess = null;
+let updateController = null;
 
 function packagedResource(...parts) {
   return path.join(process.resourcesPath, ...parts);
@@ -38,6 +42,12 @@ function backendEnvironment() {
     SENTENCE_TRANSFORMERS_HOME: packagedResource('embedding_model'),
     TRANSFORMERS_OFFLINE: '1',
     HF_HUB_OFFLINE: '1',
+    DESKTOP_UPDATE_GITEE_API_BASE:
+      process.env.DESKTOP_UPDATE_GITEE_API_BASE || UPDATE_CONFIG.giteeApiBase || 'https://gitee.com/api/v5',
+    DESKTOP_UPDATE_GITEE_OWNER:
+      process.env.DESKTOP_UPDATE_GITEE_OWNER || UPDATE_CONFIG.giteeOwner || 'lyliefeng',
+    DESKTOP_UPDATE_GITEE_REPO:
+      process.env.DESKTOP_UPDATE_GITEE_REPO || UPDATE_CONFIG.giteeRepo || 'GotBotNovel',
   };
 }
 
@@ -165,6 +175,16 @@ async function createWindow() {
   mainWindow.removeMenu();
   await mainWindow.loadURL(process.env.GOTBOT_FRONTEND_URL || BACKEND_URL);
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  if (!updateController) {
+    updateController = configureAutoUpdates({
+      app,
+      dialog,
+      getMainWindow: () => mainWindow,
+      backendUrl: BACKEND_URL,
+      logger: console,
+    });
+  }
 }
 
 function stopBackend() {
@@ -190,7 +210,13 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', stopBackend);
+app.on('before-quit', () => {
+  if (updateController) {
+    updateController.stop();
+    updateController = null;
+  }
+  stopBackend();
+});
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

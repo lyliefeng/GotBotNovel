@@ -181,6 +181,7 @@ def _sync_attachments(
     paths: Iterable[Path],
     *,
     remove_obsolete: bool,
+    replace_existing: bool = False,
 ) -> None:
     desired = {path.name: path for path in paths}
     existing = {
@@ -198,11 +199,16 @@ def _sync_attachments(
     for name, path in desired.items():
         old = existing.get(name)
         expected_size = path.stat().st_size
-        if old and int(old.get("size", -1)) == expected_size:
+        if (
+            old
+            and not replace_existing
+            and int(old.get("size", -1)) == expected_size
+        ):
             print(f"保留已有附件: {name} ({expected_size} bytes)")
             continue
         if old:
-            print(f"删除大小不匹配的已有附件: {name}")
+            reason = "同版本重发" if replace_existing else "大小不匹配"
+            print(f"删除{reason}的已有附件: {name}")
             publisher.delete_attachment(release_id, int(old["id"]))
         print(f"上传附件: {name} ({expected_size} bytes)")
         uploaded = publisher.upload_attachment(release_id, path)
@@ -247,6 +253,7 @@ def publish(
     target: str,
     macos_target: str,
     api_base: str,
+    replace_existing: bool = False,
 ) -> None:
     """在两个公开 Gitee 仓库中滚动发布桌面更新文件。
 
@@ -292,6 +299,7 @@ def publish(
                 asset_release_id,
                 part_paths,
                 remove_obsolete=True,
+                replace_existing=replace_existing,
             )
 
         release_body = (
@@ -324,6 +332,7 @@ def publish(
                 stable_release_id,
                 [*primary_paths, manifest_path],
                 remove_obsolete=True,
+                replace_existing=replace_existing,
             )
 
         main_publisher.get_or_create_release(
@@ -349,6 +358,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", default="main")
     parser.add_argument("--macos-target", default="master")
     parser.add_argument("--api-base", default="https://gitee.com/api/v5")
+    parser.add_argument(
+        "--replace-existing",
+        action="store_true",
+        help="同一 tag 重发时删除并重新上传同名附件，即使文件大小相同",
+    )
     return parser.parse_args()
 
 
@@ -367,6 +381,7 @@ def main() -> None:
         target=args.target,
         macos_target=args.macos_target,
         api_base=args.api_base,
+        replace_existing=args.replace_existing,
     )
 
 

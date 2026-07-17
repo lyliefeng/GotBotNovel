@@ -275,4 +275,5 @@ jobs:
             --macos-repo "$GITEE_MACOS_REPO" \
             --tag "$GITHUB_REF_NAME" \
             --target "$GITEE_TARGET" \
-            --macos-target "$GITEE_MACOS_TARGET"
+            --macos-target "$GITEE_MACOS_TARGET" \
+            --replace-existing

@@ -390,3 +390,39 @@ def test_get_or_create_release_treats_http_200_null_as_missing():
     assert release == {"id": 9, "tag_name": "v1.0.2"}
     assert [call[0] for call in calls] == ["GET", "POST"]
     assert calls[1][2]["data"]["prerelease"] == "false"
+
+
+def test_sync_attachments_replace_existing_reuploads_same_size(tmp_path: Path):
+    attachment = tmp_path / "chunk.part000"
+    attachment.write_bytes(b"new-content")
+    events = []
+
+    class FakePublisher:
+        def list_attachments(self, release_id):
+            return [
+                {
+                    "id": 42,
+                    "name": attachment.name,
+                    "size": attachment.stat().st_size,
+                }
+            ]
+
+        def delete_attachment(self, release_id, attachment_id):
+            events.append(("delete", release_id, attachment_id))
+
+        def upload_attachment(self, release_id, path):
+            events.append(("upload", release_id, path.name))
+            return {"name": path.name}
+
+    _publish_module._sync_attachments(
+        FakePublisher(),
+        7,
+        [attachment],
+        remove_obsolete=True,
+        replace_existing=True,
+    )
+
+    assert events == [
+        ("delete", 7, 42),
+        ("upload", 7, attachment.name),
+    ]

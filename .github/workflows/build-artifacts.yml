@@ -121,6 +121,7 @@ jobs:
 
       - name: Build desktop installer
         working-directory: electron
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ ((runner.os == 'macOS' && secrets.MACOS_CSC_LINK != '') || (runner.os == 'Windows' && secrets.WINDOWS_CSC_LINK != '')) && 'true' || 'false' }}
           CSC_LINK: ${{ runner.os == 'macOS' && secrets.MACOS_CSC_LINK || secrets.WINDOWS_CSC_LINK }}
@@ -128,7 +129,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run ${{ matrix.electron_script }}
+        run: |
+          if [ -z "${CSC_LINK:-}" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+          fi
+          npm run ${{ matrix.electron_script }}
 
       - name: Upload desktop installer
         uses: actions/upload-artifact@v6

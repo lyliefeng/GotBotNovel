@@ -51,6 +51,8 @@ def sample_manifest() -> dict:
                 "filename": "GotBotNovel-1.0.3-arm64-mac.zip",
                 "size": 7,
                 "sha512": "mac-sha512",
+                "releaseOwner": "lv-liefeng",
+                "releaseRepo": "GotBotNovel-Updates-macOS",
                 "releaseTag": "v1.0.3-macos-arm64",
                 "parts": [{"name": "mac.part000", "size": 7, "sha256": "y"}],
             },
@@ -194,7 +196,7 @@ def test_prepare_gitee_update_splits_and_hashes(tmp_path: Path):
         assert artifact["sha512"] == expected_sha512
 
 
-def test_publish_keeps_windows_in_stable_and_moves_macos_to_auxiliary_release(
+def test_publish_keeps_windows_in_main_repo_and_moves_macos_to_asset_repo(
     tmp_path: Path, monkeypatch
 ):
     assets = tmp_path / "assets"
@@ -209,19 +211,22 @@ def test_publish_keeps_windows_in_stable_and_moves_macos_to_auxiliary_release(
     uploaded_manifest = {}
 
     class FakePublisher:
-        def __init__(self, *args, **kwargs):
-            pass
+        def __init__(self, token, owner, repo, api_base):
+            self.repo = repo
 
         def get_or_create_release(self, **kwargs):
-            events.append(("release", kwargs["tag"], kwargs["prerelease"]))
-            return {
-                "v1.0.3-windows-x64": {"id": 101},
-                "v1.0.3-macos-arm64": {"id": 102},
-                "v1.0.3": {"id": 100},
-            }[kwargs["tag"]]
+            events.append(
+                ("release", self.repo, kwargs["tag"], kwargs["prerelease"])
+            )
+            if self.repo == "GotBotNovel-Updates-macOS":
+                return {"id": 102}
+            return {"id": 100}
+
+        def cleanup_other_update_attachments(self, release_id):
+            events.append(("cleanup", self.repo, release_id))
 
         def list_attachments(self, release_id):
-            if release_id == 102:
+            if self.repo == "GotBotNovel-Updates-macOS":
                 return []
             return [
                 {"id": 11, "name": "win.part000", "size": 5},
@@ -230,43 +235,81 @@ def test_publish_keeps_windows_in_stable_and_moves_macos_to_auxiliary_release(
             ]
 
         def delete_attachment(self, release_id, attachment_id):
-            events.append(("delete", release_id, attachment_id))
+            events.append(("delete", self.repo, release_id, attachment_id))
 
         def upload_attachment(self, release_id, path):
-            events.append(("upload", release_id, path.name))
+            events.append(("upload", self.repo, release_id, path.name))
             if path.name == "gotbotnovel-update.json":
                 uploaded_manifest.update(json.loads(path.read_text(encoding="utf-8")))
             return {"name": path.name}
 
         def close(self):
-            events.append(("close",))
+            events.append(("close", self.repo))
 
     monkeypatch.setattr(_publish_module, "GiteePublisher", FakePublisher)
     _publish_module.publish(
         assets_dir=assets,
         token="token",
-        owner="owner",
-        repo="repo",
+        owner="lv-liefeng",
+        repo="GotBotNovel",
+        macos_repo="GotBotNovel-Updates-macOS",
         tag="v1.0.3",
         target="main",
+        macos_target="master",
         api_base="https://gitee.com/api/v5",
     )
 
     assert events == [
-        ("release", "v1.0.3-macos-arm64", True),
-        ("upload", 102, "mac.part000"),
-        ("release", "v1.0.3", False),
-        ("delete", 100, 91),
-        ("delete", 100, 90),
-        ("upload", 100, "gotbotnovel-update.json"),
-        ("close",),
+        (
+            "release",
+            "GotBotNovel-Updates-macOS",
+            "v1.0.3-macos-arm64",
+            True,
+        ),
+        ("cleanup", "GotBotNovel-Updates-macOS", 102),
+        ("upload", "GotBotNovel-Updates-macOS", 102, "mac.part000"),
+        ("release", "GotBotNovel", "v1.0.3", True),
+        ("cleanup", "GotBotNovel", 100),
+        ("delete", "GotBotNovel", 100, 91),
+        ("delete", "GotBotNovel", 100, 90),
+        ("upload", "GotBotNovel", 100, "gotbotnovel-update.json"),
+        ("release", "GotBotNovel", "v1.0.3", False),
+        ("close", "GotBotNovel-Updates-macOS"),
+        ("close", "GotBotNovel"),
     ]
     assert "releaseTag" not in uploaded_manifest["platforms"]["windows-x64"]
+    assert uploaded_manifest["platforms"]["macos-arm64"]["releaseOwner"] == (
+        "lv-liefeng"
+    )
+    assert uploaded_manifest["platforms"]["macos-arm64"]["releaseRepo"] == (
+        "GotBotNovel-Updates-macOS"
+    )
     assert uploaded_manifest["platforms"]["macos-arm64"]["releaseTag"] == (
         "v1.0.3-macos-arm64"
     )
     assert json.loads((assets / "gotbotnovel-update.json").read_text()) == source_manifest
 
+
+
+def test_cleanup_other_update_attachments_removes_only_managed_assets():
+    publisher = _publish_module.GiteePublisher(
+        "token", "owner", "repo", "https://gitee.com/api/v5"
+    )
+    publisher.client.close()
+    deleted = []
+    publisher.list_releases = lambda: [{"id": 1}, {"id": 2}]
+    publisher.list_attachments = lambda release_id: [
+        {"id": 10, "name": "gotbotnovel-update.json"},
+        {"id": 11, "name": "GotBotNovel Setup 1.0.2.exe.part000"},
+        {"id": 12, "name": "manual-notes.txt"},
+    ]
+    publisher.delete_attachment = lambda release_id, attachment_id: deleted.append(
+        (release_id, attachment_id)
+    )
+
+    publisher.cleanup_other_update_attachments(current_release_id=2)
+
+    assert deleted == [(1, 10), (1, 11)]
 
 def test_upload_retry_reopens_attachment_file(tmp_path: Path, monkeypatch):
     attachment = tmp_path / "chunk.part000"

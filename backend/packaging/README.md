@@ -8,6 +8,8 @@ The executable is intentionally built in GitHub Actions on the target operating 
 
 `prepare_gitee_update.py` splits the Windows NSIS installer and macOS updater ZIP into 45 MiB chunks and writes `gotbotnovel-update.json`.
 
-`publish_gitee_release.py` keeps the Windows chunks and manifest in the stable `<tag>` Release. The larger macOS updater ZIP is stored in a prerelease named `<tag>-macos-arm64`; its manifest entry contains a `releaseTag` reference. This avoids Gitee's observed single-Release capacity boundary while keeping `/releases/latest` and the public version tag on the stable release.
+Gitee's API currently enforces a 1 GB Release-attachment quota per repository. `publish_gitee_release.py` therefore keeps the Windows chunks and manifest in the public `GotBotNovel` repository, while macOS chunks are stored in the public `GotBotNovel-Updates-macOS` repository. The macOS manifest entry records `releaseOwner`, `releaseRepo`, and `releaseTag`.
 
-The backend `/api/desktop-updates` route reads the stable manifest, loads referenced auxiliary Release attachments when needed, and streams the verified chunks as standard `electron-updater` files.
+Before publishing a new version, the publisher removes managed update attachments from older Releases so each repository remains below its quota. The stable Release is kept as a prerelease until all Windows chunks and the final manifest are uploaded.
+
+The backend `/api/desktop-updates` route reads the stable manifest, loads referenced cross-repository Release attachments when needed, and streams the verified chunks as standard `electron-updater` files.

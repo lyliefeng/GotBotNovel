@@ -42,11 +42,18 @@ _cache: ReleaseBundle | None = None
 _cache_lock = asyncio.Lock()
 
 
-def _api_url(path: str) -> str:
+def _repository_api_url(owner: str, repo: str, path: str) -> str:
     base = settings.DESKTOP_UPDATE_GITEE_API_BASE.rstrip("/")
-    owner = quote(settings.DESKTOP_UPDATE_GITEE_OWNER, safe="")
-    repo = quote(settings.DESKTOP_UPDATE_GITEE_REPO, safe="")
-    return f"{base}/repos/{owner}/{repo}/{path.lstrip('/')}"
+    return (
+        f"{base}/repos/{quote(owner, safe='')}/{quote(repo, safe='')}/"
+        f"{path.lstrip('/')}"
+    )
+
+
+def _api_url(path: str) -> str:
+    return _repository_api_url(
+        settings.DESKTOP_UPDATE_GITEE_OWNER, settings.DESKTOP_UPDATE_GITEE_REPO, path
+    )
 
 
 def _validate_download_url(url: str) -> None:
@@ -81,6 +88,12 @@ def _validate_manifest(manifest: Any) -> dict[str, Any]:
         release_tag = artifact.get("releaseTag")
         if release_tag is not None and (not isinstance(release_tag, str) or not release_tag):
             raise ValueError(f"{platform_name} releaseTag 无效")
+        for field in ("releaseOwner", "releaseRepo"):
+            value = artifact.get(field)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise ValueError(f"{platform_name} {field} 无效")
+        if (artifact.get("releaseOwner") or artifact.get("releaseRepo")) and not release_tag:
+            raise ValueError(f"{platform_name} 跨仓库更新缺少 releaseTag")
         if not isinstance(parts, list) or not parts:
             raise ValueError(f"{platform_name} 缺少分片")
         if sum(part.get("size", 0) for part in parts if isinstance(part, dict)) != artifact["size"]:
@@ -103,13 +116,22 @@ async def _request_json(client: httpx.AsyncClient, url: str) -> Any:
 
 
 async def _release_attachments(
-    client: httpx.AsyncClient, release: Any, *, label: str
+    client: httpx.AsyncClient,
+    release: Any,
+    *,
+    label: str,
+    owner: str | None = None,
+    repo: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     if not isinstance(release, dict) or not isinstance(release.get("id"), int):
         raise ValueError(f"{label} 缺少有效 Release id")
     attachment_list = await _request_json(
         client,
-        _api_url(f"releases/{release['id']}/attach_files?per_page=100&direction=asc"),
+        _repository_api_url(
+            owner or settings.DESKTOP_UPDATE_GITEE_OWNER,
+            repo or settings.DESKTOP_UPDATE_GITEE_REPO,
+            f"releases/{release['id']}/attach_files?per_page=100&direction=asc",
+        ),
     )
     if not isinstance(attachment_list, list):
         raise ValueError(f"{label} 附件列表格式无效")
@@ -136,23 +158,50 @@ async def _fetch_release_bundle() -> ReleaseBundle:
 
         # 大型安装包按平台保存在 prerelease 辅助 Release。旧清单没有
         # releaseTag 时仍回退到正式 Release，兼容早期发布格式。
-        attachments_by_tag: dict[str, dict[str, dict[str, Any]]] = {}
-        release_tags = {
-            artifact.get("releaseTag")
+        attachments_by_source: dict[
+            tuple[str, str, str], dict[str, dict[str, Any]]
+        ] = {}
+        release_sources = {
+            (
+                artifact.get("releaseOwner") or settings.DESKTOP_UPDATE_GITEE_OWNER,
+                artifact.get("releaseRepo") or settings.DESKTOP_UPDATE_GITEE_REPO,
+                artifact["releaseTag"],
+            )
             for artifact in manifest["platforms"].values()
             if artifact.get("releaseTag")
         }
-        for release_tag in sorted(release_tags):
+        for release_owner, release_repo, release_tag in sorted(release_sources):
             tagged_release = await _request_json(
-                client, _api_url(f"releases/tags/{quote(release_tag, safe='')}")
+                client,
+                _repository_api_url(
+                    release_owner,
+                    release_repo,
+                    f"releases/tags/{quote(release_tag, safe='')}",
+                ),
             )
-            attachments_by_tag[release_tag] = await _release_attachments(
-                client, tagged_release, label=f"Gitee 辅助 Release {release_tag}"
+            source = (release_owner, release_repo, release_tag)
+            attachments_by_source[source] = await _release_attachments(
+                client,
+                tagged_release,
+                label=(
+                    f"Gitee 辅助 Release {release_owner}/{release_repo}@{release_tag}"
+                ),
+                owner=release_owner,
+                repo=release_repo,
             )
 
         for platform_name, artifact in manifest["platforms"].items():
             release_tag = artifact.get("releaseTag")
-            platform_attachments = attachments_by_tag.get(release_tag, attachments)
+            if release_tag:
+                source = (
+                    artifact.get("releaseOwner")
+                    or settings.DESKTOP_UPDATE_GITEE_OWNER,
+                    artifact.get("releaseRepo") or settings.DESKTOP_UPDATE_GITEE_REPO,
+                    release_tag,
+                )
+                platform_attachments = attachments_by_source[source]
+            else:
+                platform_attachments = attachments
             for part in artifact["parts"]:
                 attachment = platform_attachments.get(part["name"])
                 if not attachment:

@@ -265,10 +265,14 @@ jobs:
           GITEE_OWNER: ${{ vars.GITEE_OWNER || 'lv-liefeng' }}
           GITEE_REPO: ${{ vars.GITEE_REPO || 'GotBotNovel' }}
           GITEE_TARGET: ${{ vars.GITEE_TARGET || 'main' }}
+          GITEE_MACOS_REPO: ${{ vars.GITEE_MACOS_REPO || 'GotBotNovel-Updates-macOS' }}
+          GITEE_MACOS_TARGET: ${{ vars.GITEE_MACOS_TARGET || 'master' }}
         run: |
           python backend/packaging/publish_gitee_release.py \
             --assets gitee-update-assets \
             --owner "$GITEE_OWNER" \
             --repo "$GITEE_REPO" \
+            --macos-repo "$GITEE_MACOS_REPO" \
             --tag "$GITHUB_REF_NAME" \
-            --target "$GITEE_TARGET"
+            --target "$GITEE_TARGET" \
+            --macos-target "$GITEE_MACOS_TARGET"

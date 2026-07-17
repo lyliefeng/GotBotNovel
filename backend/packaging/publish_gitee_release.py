@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import tempfile
 import time
 from copy import deepcopy
@@ -16,6 +17,7 @@ import httpx
 
 MANIFEST_NAME = "gotbotnovel-update.json"
 PRIMARY_PLATFORM = "windows-x64"
+MANAGED_PART_RE = re.compile(r"^GotBotNovel.*\.part\d{3}$")
 
 
 class GiteePublisher:
@@ -24,7 +26,9 @@ class GiteePublisher:
         self.owner = owner
         self.repo = repo
         self.api_base = api_base.rstrip("/")
-        self.client = httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0), follow_redirects=True)
+        self.client = httpx.Client(
+            timeout=httpx.Timeout(300.0, connect=30.0), follow_redirects=True
+        )
 
     def close(self) -> None:
         self.client.close()
@@ -79,19 +83,32 @@ class GiteePublisher:
         if not isinstance(release, dict) or not release.get("id"):
             response = self.request("POST", self.api("releases"), data=form)
         else:
-            release_id = release["id"]
-            response = self.request("PATCH", self.api(f"releases/{release_id}"), data=form)
+            response = self.request(
+                "PATCH", self.api(f"releases/{release['id']}"), data=form
+            )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict) or not payload.get("id"):
             raise RuntimeError("Gitee Release API 未返回有效的 Release 数据")
         return payload
 
+    def list_releases(self) -> list[dict[str, Any]]:
+        response = self.request(
+            "GET",
+            self.api("releases"),
+            params={"access_token": self.token, "per_page": 100, "page": 1},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise RuntimeError("Gitee Release 列表格式无效")
+        return payload
+
     def list_attachments(self, release_id: int) -> list[dict[str, Any]]:
         response = self.request(
             "GET",
             self.api(f"releases/{release_id}/attach_files"),
-            params={"per_page": 100, "direction": "asc"},
+            params={"access_token": self.token, "per_page": 100, "direction": "asc"},
         )
         response.raise_for_status()
         payload = response.json()
@@ -107,6 +124,21 @@ class GiteePublisher:
         )
         response.raise_for_status()
 
+    def cleanup_other_update_attachments(self, current_release_id: int) -> None:
+        """清理旧版本更新附件，避免滚动发布超过单仓库 1 GB 配额。"""
+        for release in self.list_releases():
+            release_id = release.get("id") if isinstance(release, dict) else None
+            if not isinstance(release_id, int) or release_id == current_release_id:
+                continue
+            for attachment in self.list_attachments(release_id):
+                name = attachment.get("name") if isinstance(attachment, dict) else None
+                attachment_id = attachment.get("id") if isinstance(attachment, dict) else None
+                if not isinstance(name, str) or not isinstance(attachment_id, int):
+                    continue
+                if name == MANIFEST_NAME or MANAGED_PART_RE.fullmatch(name):
+                    print(f"清理旧 Release 更新附件: {name}")
+                    self.delete_attachment(release_id, attachment_id)
+
     def upload_attachment(self, release_id: int, path: Path) -> dict[str, Any]:
         # 每次重试都重新打开文件，避免首次请求后文件游标停在 EOF，导致重试上传空附件。
         for attempt in range(1, 6):
@@ -121,11 +153,15 @@ class GiteePublisher:
                     response.raise_for_status()
                 if response.status_code >= 400:
                     detail = response.text.strip().replace("\n", " ")[:500]
-                    raise httpx.HTTPStatusError(
+                    error = httpx.HTTPStatusError(
                         f"Gitee 附件上传返回 {response.status_code}: {detail}",
                         request=response.request,
                         response=response,
                     )
+                    # 配额错误不会因重试恢复，立即交给上层处理。
+                    if "仓库附件配额" in detail:
+                        raise RuntimeError(str(error)) from error
+                    raise error
                 payload = response.json()
                 if not isinstance(payload, dict):
                     raise RuntimeError("Gitee 附件上传响应格式无效")
@@ -206,16 +242,17 @@ def publish(
     token: str,
     owner: str,
     repo: str,
+    macos_repo: str,
     tag: str,
     target: str,
+    macos_target: str,
     api_base: str,
 ) -> None:
-    """发布分片，并把超出主 Release 容量的 macOS 包放到辅助 Release。
+    """在两个公开 Gitee 仓库中滚动发布桌面更新文件。
 
-    实测 Gitee 单个 Release 接近 1 GiB 后继续上传大附件会返回 HTTP 400。
-    当前 Windows 更新包约 748 MB，可与清单保留在正式 Release；macOS 更新包
-    放入 prerelease 辅助 Release。这样保持标准的 latest/tag，同时避免重复上传
-    已存在的 Windows 分片。
+    Gitee 明确返回单仓库附件配额 1 GB。Windows 更新包约 748 MB，留在
+    主代码仓库；macOS ZIP 约 876 MB，发布到独立公开仓库。正式 Release
+    清单记录跨仓库位置，后端按清单重新拼接并校验文件。
     """
     source_manifest = _load_manifest(assets_dir)
     published_manifest = deepcopy(source_manifest)
@@ -223,45 +260,54 @@ def publish(
     if PRIMARY_PLATFORM not in platforms:
         raise ValueError(f"更新清单缺少主平台: {PRIMARY_PLATFORM}")
 
-    publisher = GiteePublisher(token, owner, repo, api_base)
+    main_publisher = GiteePublisher(token, owner, repo, api_base)
+    macos_publisher = GiteePublisher(token, owner, macos_repo, api_base)
     try:
-        # 先完成辅助 Release，确保正式清单出现时其引用的全部分片已经可用。
+        # 先完成 macOS 仓库，确保正式清单出现时全部跨仓库分片已经可用。
         for platform_name, artifact in platforms.items():
             if platform_name == PRIMARY_PLATFORM:
-                artifact.pop("releaseTag", None)
+                for field in ("releaseOwner", "releaseRepo", "releaseTag"):
+                    artifact.pop(field, None)
                 continue
             part_paths = _artifact_part_paths(assets_dir, platform_name, artifact)
             asset_tag = f"{tag}-{platform_name}"
+            artifact["releaseOwner"] = owner
+            artifact["releaseRepo"] = macos_repo
             artifact["releaseTag"] = asset_tag
-            asset_release = publisher.get_or_create_release(
+            asset_release = macos_publisher.get_or_create_release(
                 tag=asset_tag,
-                target=target,
+                target=macos_target,
                 name=f"GotBotNovel {tag} {platform_name} 更新分片",
                 body=(
                     f"GotBotNovel {tag} 的 {platform_name} 自动更新分片。"
-                    "此辅助 Release 由正式 Release 的更新清单引用。"
+                    f"正式更新清单位于 {owner}/{repo}。"
                 ),
                 prerelease=True,
             )
-            print(f"同步辅助 Release: {asset_tag}")
+            asset_release_id = int(asset_release["id"])
+            macos_publisher.cleanup_other_update_attachments(asset_release_id)
+            print(f"同步 macOS 更新仓库 Release: {asset_tag}")
             _sync_attachments(
-                publisher,
-                int(asset_release["id"]),
+                macos_publisher,
+                asset_release_id,
                 part_paths,
                 remove_obsolete=True,
             )
 
-        stable_release = publisher.get_or_create_release(
+        release_body = (
+            "GotBotNovel 桌面自动更新文件。Windows 分片和更新清单保存在本 "
+            f"Release；macOS 更新分片保存在 {owner}/{macos_repo}。"
+        )
+        # 先保持 prerelease，只有全部 Windows 分片和清单就绪后才切为 latest。
+        stable_release = main_publisher.get_or_create_release(
             tag=tag,
             target=target,
             name=f"GotBotNovel {tag}",
-            body=(
-                "GotBotNovel 桌面自动更新文件。Windows 分片和更新清单保存在本 "
-                "Release；macOS 大型更新包保存在 prerelease 辅助 Release。"
-            ),
-            prerelease=False,
+            body=release_body,
+            prerelease=True,
         )
         stable_release_id = int(stable_release["id"])
+        main_publisher.cleanup_other_update_attachments(stable_release_id)
         primary_paths = _artifact_part_paths(
             assets_dir, PRIMARY_PLATFORM, platforms[PRIMARY_PLATFORM]
         )
@@ -274,13 +320,23 @@ def publish(
             )
             print(f"同步正式 Release: {tag}")
             _sync_attachments(
-                publisher,
+                main_publisher,
                 stable_release_id,
                 [*primary_paths, manifest_path],
                 remove_obsolete=True,
             )
+
+        main_publisher.get_or_create_release(
+            tag=tag,
+            target=target,
+            name=f"GotBotNovel {tag}",
+            body=release_body,
+            prerelease=False,
+        )
+        print(f"正式 Release 已切换为 latest: {tag}")
     finally:
-        publisher.close()
+        macos_publisher.close()
+        main_publisher.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -288,8 +344,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--assets", type=Path, required=True)
     parser.add_argument("--owner", required=True)
     parser.add_argument("--repo", required=True)
+    parser.add_argument("--macos-repo", required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--target", default="main")
+    parser.add_argument("--macos-target", default="master")
     parser.add_argument("--api-base", default="https://gitee.com/api/v5")
     return parser.parse_args()
 
@@ -304,8 +362,10 @@ def main() -> None:
         token=token,
         owner=args.owner,
         repo=args.repo,
+        macos_repo=args.macos_repo,
         tag=args.tag,
         target=args.target,
+        macos_target=args.macos_target,
         api_base=args.api_base,
     )
 

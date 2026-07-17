@@ -78,6 +78,9 @@ def _validate_manifest(manifest: Any) -> dict[str, Any]:
             raise ValueError(f"{platform_name} 缺少 sha512")
         if not isinstance(artifact.get("size"), int) or artifact["size"] <= 0:
             raise ValueError(f"{platform_name} size 无效")
+        release_tag = artifact.get("releaseTag")
+        if release_tag is not None and (not isinstance(release_tag, str) or not release_tag):
+            raise ValueError(f"{platform_name} releaseTag 无效")
         if not isinstance(parts, list) or not parts:
             raise ValueError(f"{platform_name} 缺少分片")
         if sum(part.get("size", 0) for part in parts if isinstance(part, dict)) != artifact["size"]:
@@ -99,25 +102,29 @@ async def _request_json(client: httpx.AsyncClient, url: str) -> Any:
     return response.json()
 
 
+async def _release_attachments(
+    client: httpx.AsyncClient, release: Any, *, label: str
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(release, dict) or not isinstance(release.get("id"), int):
+        raise ValueError(f"{label} 缺少有效 Release id")
+    attachment_list = await _request_json(
+        client,
+        _api_url(f"releases/{release['id']}/attach_files?per_page=100&direction=asc"),
+    )
+    if not isinstance(attachment_list, list):
+        raise ValueError(f"{label} 附件列表格式无效")
+    return {
+        item["name"]: item
+        for item in attachment_list
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+
+
 async def _fetch_release_bundle() -> ReleaseBundle:
     timeout = httpx.Timeout(settings.DESKTOP_UPDATE_HTTP_TIMEOUT_SECONDS, connect=20.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         release = await _request_json(client, _api_url("releases/latest"))
-        release_id = release.get("id")
-        if not isinstance(release_id, int):
-            raise ValueError("Gitee 最新 Release 缺少有效 id")
-
-        attachment_list = await _request_json(
-            client,
-            _api_url(f"releases/{release_id}/attach_files?per_page=100&direction=asc"),
-        )
-        if not isinstance(attachment_list, list):
-            raise ValueError("Gitee Release 附件列表格式无效")
-        attachments = {
-            item["name"]: item
-            for item in attachment_list
-            if isinstance(item, dict) and isinstance(item.get("name"), str)
-        }
+        attachments = await _release_attachments(client, release, label="Gitee 最新 Release")
         manifest_attachment = attachments.get(MANIFEST_NAME)
         if not manifest_attachment:
             raise FileNotFoundError(f"最新 Gitee Release 缺少 {MANIFEST_NAME}")
@@ -127,16 +134,36 @@ async def _fetch_release_bundle() -> ReleaseBundle:
         _validate_download_url(manifest_url)
         manifest = _validate_manifest(await _request_json(client, manifest_url))
 
-        # 发布清单里的每个分片都必须真实存在于同一个 Release。
-        for artifact in manifest["platforms"].values():
+        # 大型安装包按平台保存在 prerelease 辅助 Release。旧清单没有
+        # releaseTag 时仍回退到正式 Release，兼容早期发布格式。
+        attachments_by_tag: dict[str, dict[str, dict[str, Any]]] = {}
+        release_tags = {
+            artifact.get("releaseTag")
+            for artifact in manifest["platforms"].values()
+            if artifact.get("releaseTag")
+        }
+        for release_tag in sorted(release_tags):
+            tagged_release = await _request_json(
+                client, _api_url(f"releases/tags/{quote(release_tag, safe='')}")
+            )
+            attachments_by_tag[release_tag] = await _release_attachments(
+                client, tagged_release, label=f"Gitee 辅助 Release {release_tag}"
+            )
+
+        for platform_name, artifact in manifest["platforms"].items():
+            release_tag = artifact.get("releaseTag")
+            platform_attachments = attachments_by_tag.get(release_tag, attachments)
             for part in artifact["parts"]:
-                attachment = attachments.get(part["name"])
+                attachment = platform_attachments.get(part["name"])
                 if not attachment:
-                    raise FileNotFoundError(f"Release 缺少更新分片: {part['name']}")
+                    raise FileNotFoundError(
+                        f"{platform_name} Release 缺少更新分片: {part['name']}"
+                    )
                 download_url = attachment.get("browser_download_url")
                 if not isinstance(download_url, str):
                     raise ValueError(f"分片缺少下载地址: {part['name']}")
                 _validate_download_url(download_url)
+                attachments[part["name"]] = attachment
 
         return ReleaseBundle(
             fetched_at=time.monotonic(),

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import importlib.util
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+import app.api.desktop_updates as desktop_updates
 from app.api.desktop_updates import (
     ReleaseBundle,
     _api_url,
@@ -13,6 +15,7 @@ from app.api.desktop_updates import (
     _update_yaml,
     _validate_manifest,
 )
+
 _PREPARE_SPEC = importlib.util.spec_from_file_location(
     "prepare_gitee_update",
     Path(__file__).parents[1] / "packaging" / "prepare_gitee_update.py",
@@ -41,12 +44,14 @@ def sample_manifest() -> dict:
                 "filename": "GotBotNovel Setup 1.0.3.exe",
                 "size": 5,
                 "sha512": "windows-sha512",
+                "releaseTag": "v1.0.3-windows-x64",
                 "parts": [{"name": "win.part000", "size": 5, "sha256": "x"}],
             },
             "macos-arm64": {
                 "filename": "GotBotNovel-1.0.3-arm64-mac.zip",
                 "size": 7,
                 "sha512": "mac-sha512",
+                "releaseTag": "v1.0.3-macos-arm64",
                 "parts": [{"name": "mac.part000", "size": 7, "sha256": "y"}],
             },
         },
@@ -86,6 +91,77 @@ def test_validate_manifest_rejects_missing_part_bytes():
         raise AssertionError("无效清单未被拒绝")
 
 
+def test_validate_manifest_rejects_empty_release_tag():
+    manifest = sample_manifest()
+    manifest["platforms"]["windows-x64"]["releaseTag"] = ""
+    try:
+        _validate_manifest(manifest)
+    except ValueError as exc:
+        assert "releaseTag" in str(exc)
+    else:
+        raise AssertionError("空 releaseTag 未被拒绝")
+
+
+def test_fetch_release_bundle_reads_platform_parts_from_auxiliary_releases(monkeypatch):
+    manifest = sample_manifest()
+    manifest_url = "https://gitee.com/lv-liefeng/GotBotNovel/releases/download/v1.0.3/gotbotnovel-update.json"
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    async def fake_request_json(client, url):
+        if url.endswith("/releases/latest"):
+            return {"id": 1, "tag_name": "v1.0.3"}
+        if "/releases/1/attach_files" in url:
+            return [
+                {
+                    "name": "gotbotnovel-update.json",
+                    "browser_download_url": manifest_url,
+                }
+            ]
+        if url == manifest_url:
+            return manifest
+        if url.endswith("/releases/tags/v1.0.3-windows-x64"):
+            return {"id": 2}
+        if url.endswith("/releases/tags/v1.0.3-macos-arm64"):
+            return {"id": 3}
+        if "/releases/2/attach_files" in url:
+            return [
+                {
+                    "name": "win.part000",
+                    "browser_download_url": "https://gitee.com/download/win.part000",
+                }
+            ]
+        if "/releases/3/attach_files" in url:
+            return [
+                {
+                    "name": "mac.part000",
+                    "browser_download_url": "https://gitee.com/download/mac.part000",
+                }
+            ]
+        raise AssertionError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(desktop_updates.httpx, "AsyncClient", DummyAsyncClient)
+    monkeypatch.setattr(desktop_updates, "_request_json", fake_request_json)
+
+    bundle = asyncio.run(desktop_updates._fetch_release_bundle())
+
+    assert bundle.manifest == manifest
+    assert bundle.attachments["win.part000"]["browser_download_url"].endswith(
+        "win.part000"
+    )
+    assert bundle.attachments["mac.part000"]["browser_download_url"].endswith(
+        "mac.part000"
+    )
+
+
 def test_parse_http_ranges():
     assert _parse_range(None, 100) == (0, 99, False)
     assert _parse_range("bytes=10-19", 100) == (10, 19, True)
@@ -110,42 +186,59 @@ def test_prepare_gitee_update_splits_and_hashes(tmp_path: Path):
     persisted = json.loads((output_dir / "gotbotnovel-update.json").read_text())
     for platform, original in (("windows-x64", exe), ("macos-arm64", mac_zip)):
         artifact = persisted["platforms"][platform]
-        rebuilt = b"".join((output_dir / part["name"]).read_bytes() for part in artifact["parts"])
+        rebuilt = b"".join(
+            (output_dir / part["name"]).read_bytes() for part in artifact["parts"]
+        )
         assert rebuilt == original.read_bytes()
         expected_sha512 = base64.b64encode(hashlib.sha512(rebuilt).digest()).decode("ascii")
         assert artifact["sha512"] == expected_sha512
 
 
-def test_publish_removes_old_manifest_before_uploading_parts(tmp_path: Path, monkeypatch):
+def test_publish_splits_platforms_into_prerelease_releases(tmp_path: Path, monkeypatch):
     assets = tmp_path / "assets"
     assets.mkdir()
-    (assets / "artifact.part000").write_bytes(b"part-0")
-    (assets / "artifact.part001").write_bytes(b"part-1")
-    (assets / "gotbotnovel-update.json").write_text("{}", encoding="utf-8")
+    (assets / "win.part000").write_bytes(b"win00")
+    (assets / "mac.part000").write_bytes(b"macos00")
+    source_manifest = sample_manifest()
+    (assets / "gotbotnovel-update.json").write_text(
+        json.dumps(source_manifest), encoding="utf-8"
+    )
     events = []
+    uploaded_manifest = {}
 
     class FakePublisher:
         def __init__(self, *args, **kwargs):
             pass
 
         def get_or_create_release(self, **kwargs):
-            return {"id": 7}
+            events.append(("release", kwargs["tag"], kwargs["prerelease"]))
+            return {
+                "v1.0.3-windows-x64": {"id": 101},
+                "v1.0.3-macos-arm64": {"id": 102},
+                "v1.0.3": {"id": 100},
+            }[kwargs["tag"]]
 
         def list_attachments(self, release_id):
+            if release_id == 101:
+                return [{"id": 11, "name": "win.part000", "size": 5}]
+            if release_id == 102:
+                return []
             return [
-                {"id": 10, "name": "gotbotnovel-update.json"},
-                {"id": 11, "name": "artifact.part000"},
+                {"id": 90, "name": "gotbotnovel-update.json", "size": 1},
+                {"id": 91, "name": "obsolete.part000", "size": 9},
             ]
 
         def delete_attachment(self, release_id, attachment_id):
-            events.append(("delete", attachment_id))
+            events.append(("delete", release_id, attachment_id))
 
         def upload_attachment(self, release_id, path):
-            events.append(("upload", path.name))
+            events.append(("upload", release_id, path.name))
+            if path.name == "gotbotnovel-update.json":
+                uploaded_manifest.update(json.loads(path.read_text(encoding="utf-8")))
             return {"name": path.name}
 
         def close(self):
-            events.append(("close", None))
+            events.append(("close",))
 
     monkeypatch.setattr(_publish_module, "GiteePublisher", FakePublisher)
     _publish_module.publish(
@@ -159,13 +252,22 @@ def test_publish_removes_old_manifest_before_uploading_parts(tmp_path: Path, mon
     )
 
     assert events == [
-        ("delete", 10),
-        ("delete", 11),
-        ("upload", "artifact.part000"),
-        ("upload", "artifact.part001"),
-        ("upload", "gotbotnovel-update.json"),
-        ("close", None),
+        ("release", "v1.0.3-windows-x64", True),
+        ("release", "v1.0.3-macos-arm64", True),
+        ("upload", 102, "mac.part000"),
+        ("release", "v1.0.3", False),
+        ("delete", 100, 91),
+        ("delete", 100, 90),
+        ("upload", 100, "gotbotnovel-update.json"),
+        ("close",),
     ]
+    assert uploaded_manifest["platforms"]["windows-x64"]["releaseTag"] == (
+        "v1.0.3-windows-x64"
+    )
+    assert uploaded_manifest["platforms"]["macos-arm64"]["releaseTag"] == (
+        "v1.0.3-macos-arm64"
+    )
+    assert json.loads((assets / "gotbotnovel-update.json").read_text()) == source_manifest
 
 
 def test_upload_retry_reopens_attachment_file(tmp_path: Path, monkeypatch):
@@ -246,46 +348,4 @@ def test_get_or_create_release_treats_http_200_null_as_missing():
 
     assert release == {"id": 9, "tag_name": "v1.0.2"}
     assert [call[0] for call in calls] == ["GET", "POST"]
-
-
-def test_publish_keeps_existing_attachment_with_matching_size(tmp_path: Path, monkeypatch):
-    assets = tmp_path / "assets"
-    assets.mkdir()
-    part = assets / "artifact.part000"
-    part.write_bytes(b"already-uploaded")
-    manifest = assets / "gotbotnovel-update.json"
-    manifest.write_text("{}", encoding="utf-8")
-    events = []
-
-    class FakePublisher:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def get_or_create_release(self, **kwargs):
-            return {"id": 7}
-
-        def list_attachments(self, release_id):
-            return [{"id": 11, "name": part.name, "size": part.stat().st_size}]
-
-        def delete_attachment(self, release_id, attachment_id):
-            events.append(("delete", attachment_id))
-
-        def upload_attachment(self, release_id, path):
-            events.append(("upload", path.name))
-            return {"name": path.name}
-
-        def close(self):
-            events.append(("close", None))
-
-    monkeypatch.setattr(_publish_module, "GiteePublisher", FakePublisher)
-    _publish_module.publish(
-        assets_dir=assets,
-        token="token",
-        owner="owner",
-        repo="repo",
-        tag="v1.0.2",
-        target="main",
-        api_base="https://gitee.com/api/v5",
-    )
-
-    assert events == [("upload", manifest.name), ("close", None)]
+    assert calls[1][2]["data"]["prerelease"] == "false"

@@ -203,3 +203,46 @@ def test_upload_retry_reopens_attachment_file(tmp_path: Path, monkeypatch):
 
     assert result == {"name": attachment.name}
     assert attempts == [b"complete-payload", b"complete-payload"]
+
+
+def test_get_or_create_release_treats_http_200_null_as_missing():
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise AssertionError(f"unexpected status {self.status_code}")
+
+        def json(self):
+            return self._payload
+
+    publisher = _publish_module.GiteePublisher(
+        "token", "owner", "repo", "https://gitee.com/api/v5"
+    )
+    publisher.client.close()
+
+    def fake_request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return FakeResponse(200, None)
+        if method == "POST":
+            return FakeResponse(201, {"id": 9, "tag_name": "v1.0.2"})
+        raise AssertionError(f"unexpected method {method}")
+
+    publisher.request = fake_request
+    try:
+        release = publisher.get_or_create_release(
+            tag="v1.0.2",
+            target="main",
+            name="GotBotNovel v1.0.2",
+            body="desktop updates",
+        )
+    finally:
+        publisher.close()
+
+    assert release == {"id": 9, "tag_name": "v1.0.2"}
+    assert [call[0] for call in calls] == ["GET", "POST"]

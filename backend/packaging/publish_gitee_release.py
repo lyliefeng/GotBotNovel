@@ -63,14 +63,23 @@ class GiteePublisher:
             "target_commitish": target,
             "prerelease": "false",
         }
-        if response.status_code == 404:
+        release = None
+        if response.status_code != 404:
+            response.raise_for_status()
+            release = response.json()
+
+        # Gitee 对不存在的 tag release 可能返回 HTTP 200 和 JSON null，
+        # 而不是文档中常见的 404。两种情况都应创建 Release。
+        if not isinstance(release, dict) or not release.get("id"):
             response = self.request("POST", self.api("releases"), data=form)
         else:
-            response.raise_for_status()
-            release_id = response.json()["id"]
+            release_id = release["id"]
             response = self.request("PATCH", self.api(f"releases/{release_id}"), data=form)
         response.raise_for_status()
-        return response.json()
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("id"):
+            raise RuntimeError("Gitee Release API 未返回有效的 Release 数据")
+        return payload
 
     def list_attachments(self, release_id: int) -> list[dict[str, Any]]:
         response = self.request(

@@ -194,7 +194,9 @@ def test_prepare_gitee_update_splits_and_hashes(tmp_path: Path):
         assert artifact["sha512"] == expected_sha512
 
 
-def test_publish_splits_platforms_into_prerelease_releases(tmp_path: Path, monkeypatch):
+def test_publish_keeps_windows_in_stable_and_moves_macos_to_auxiliary_release(
+    tmp_path: Path, monkeypatch
+):
     assets = tmp_path / "assets"
     assets.mkdir()
     (assets / "win.part000").write_bytes(b"win00")
@@ -219,11 +221,10 @@ def test_publish_splits_platforms_into_prerelease_releases(tmp_path: Path, monke
             }[kwargs["tag"]]
 
         def list_attachments(self, release_id):
-            if release_id == 101:
-                return [{"id": 11, "name": "win.part000", "size": 5}]
             if release_id == 102:
                 return []
             return [
+                {"id": 11, "name": "win.part000", "size": 5},
                 {"id": 90, "name": "gotbotnovel-update.json", "size": 1},
                 {"id": 91, "name": "obsolete.part000", "size": 9},
             ]
@@ -252,7 +253,6 @@ def test_publish_splits_platforms_into_prerelease_releases(tmp_path: Path, monke
     )
 
     assert events == [
-        ("release", "v1.0.3-windows-x64", True),
         ("release", "v1.0.3-macos-arm64", True),
         ("upload", 102, "mac.part000"),
         ("release", "v1.0.3", False),
@@ -261,9 +261,7 @@ def test_publish_splits_platforms_into_prerelease_releases(tmp_path: Path, monke
         ("upload", 100, "gotbotnovel-update.json"),
         ("close",),
     ]
-    assert uploaded_manifest["platforms"]["windows-x64"]["releaseTag"] == (
-        "v1.0.3-windows-x64"
-    )
+    assert "releaseTag" not in uploaded_manifest["platforms"]["windows-x64"]
     assert uploaded_manifest["platforms"]["macos-arm64"]["releaseTag"] == (
         "v1.0.3-macos-arm64"
     )

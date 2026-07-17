@@ -15,6 +15,7 @@ from urllib.parse import quote
 import httpx
 
 MANIFEST_NAME = "gotbotnovel-update.json"
+PRIMARY_PLATFORM = "windows-x64"
 
 
 class GiteePublisher:
@@ -182,6 +183,24 @@ def _load_manifest(assets_dir: Path) -> dict[str, Any]:
     return payload
 
 
+def _artifact_part_paths(
+    assets_dir: Path, platform_name: str, artifact: Any
+) -> list[Path]:
+    if not isinstance(artifact, dict) or not isinstance(artifact.get("parts"), list):
+        raise ValueError(f"{platform_name} 更新清单无效")
+    part_paths: list[Path] = []
+    for part in artifact["parts"]:
+        if not isinstance(part, dict) or not isinstance(part.get("name"), str):
+            raise ValueError(f"{platform_name} 包含无效分片")
+        path = assets_dir / part["name"]
+        if not path.is_file():
+            raise FileNotFoundError(f"缺少更新分片: {path}")
+        if path.stat().st_size != part.get("size"):
+            raise ValueError(f"更新分片大小不匹配: {path.name}")
+        part_paths.append(path)
+    return part_paths
+
+
 def publish(
     assets_dir: Path,
     token: str,
@@ -191,33 +210,29 @@ def publish(
     target: str,
     api_base: str,
 ) -> None:
-    """按平台发布分片，主 Release 只保存清单。
+    """发布分片，并把超出主 Release 容量的 macOS 包放到辅助 Release。
 
     实测 Gitee 单个 Release 接近 1 GiB 后继续上传大附件会返回 HTTP 400。
-    Windows 和 macOS 更新包分别小于 1 GiB，因此放入两个 prerelease 辅助
-    Release；正式 Release 保持 latest，只保存带 releaseTag 的更新清单。
+    当前 Windows 更新包约 748 MB，可与清单保留在正式 Release；macOS 更新包
+    放入 prerelease 辅助 Release。这样保持标准的 latest/tag，同时避免重复上传
+    已存在的 Windows 分片。
     """
     source_manifest = _load_manifest(assets_dir)
     published_manifest = deepcopy(source_manifest)
-    publisher = GiteePublisher(token, owner, repo, api_base)
+    platforms = published_manifest["platforms"]
+    if PRIMARY_PLATFORM not in platforms:
+        raise ValueError(f"更新清单缺少主平台: {PRIMARY_PLATFORM}")
 
+    publisher = GiteePublisher(token, owner, repo, api_base)
     try:
-        for platform_name, artifact in published_manifest["platforms"].items():
-            if not isinstance(artifact, dict) or not isinstance(artifact.get("parts"), list):
-                raise ValueError(f"{platform_name} 更新清单无效")
+        # 先完成辅助 Release，确保正式清单出现时其引用的全部分片已经可用。
+        for platform_name, artifact in platforms.items():
+            if platform_name == PRIMARY_PLATFORM:
+                artifact.pop("releaseTag", None)
+                continue
+            part_paths = _artifact_part_paths(assets_dir, platform_name, artifact)
             asset_tag = f"{tag}-{platform_name}"
             artifact["releaseTag"] = asset_tag
-            part_paths: list[Path] = []
-            for part in artifact["parts"]:
-                if not isinstance(part, dict) or not isinstance(part.get("name"), str):
-                    raise ValueError(f"{platform_name} 包含无效分片")
-                path = assets_dir / part["name"]
-                if not path.is_file():
-                    raise FileNotFoundError(f"缺少更新分片: {path}")
-                if path.stat().st_size != part.get("size"):
-                    raise ValueError(f"更新分片大小不匹配: {path.name}")
-                part_paths.append(path)
-
             asset_release = publisher.get_or_create_release(
                 tag=asset_tag,
                 target=target,
@@ -241,12 +256,15 @@ def publish(
             target=target,
             name=f"GotBotNovel {tag}",
             body=(
-                "GotBotNovel 桌面自动更新清单。大型安装包按平台拆分到 prerelease "
-                "辅助 Release，由应用自动下载、拼接并校验。"
+                "GotBotNovel 桌面自动更新文件。Windows 分片和更新清单保存在本 "
+                "Release；macOS 大型更新包保存在 prerelease 辅助 Release。"
             ),
             prerelease=False,
         )
         stable_release_id = int(stable_release["id"])
+        primary_paths = _artifact_part_paths(
+            assets_dir, PRIMARY_PLATFORM, platforms[PRIMARY_PLATFORM]
+        )
 
         with tempfile.TemporaryDirectory(prefix="gotbot-gitee-manifest-") as temp_dir:
             manifest_path = Path(temp_dir) / MANIFEST_NAME
@@ -254,11 +272,11 @@ def publish(
                 json.dumps(published_manifest, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
-            print(f"同步正式 Release 清单: {tag}")
+            print(f"同步正式 Release: {tag}")
             _sync_attachments(
                 publisher,
                 stable_release_id,
-                [manifest_path],
+                [*primary_paths, manifest_path],
                 remove_obsolete=True,
             )
     finally:

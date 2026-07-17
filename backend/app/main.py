@@ -70,6 +70,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"后台任务表检查失败（不影响启动）: {e}")
 
+    # 首次部署生成随机临时管理员；已有自定义管理员凭据时不会改动。
+    try:
+        from app.bootstrap_admin import ensure_initial_local_admin
+        await ensure_initial_local_admin()
+    except Exception as e:
+        logger.error(f"首次登录管理员初始化失败: {e}", exc_info=True)
+        raise
+
     logger.info("应用启动完成")
     
     yield

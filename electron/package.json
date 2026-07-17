@@ -54,10 +54,39 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "GotBotNovel 需要访问本机网络，以连接随应用启动的本地服务。",
+        "NSDocumentsFolderUsageDescription": "GotBotNovel 需要在您选择时从“文稿”文件夹导入或导出内容。",
+        "NSDownloadsFolderUsageDescription": "GotBotNovel 需要在您选择时从“下载”文件夹导入或导出内容。",
+        "NSDesktopFolderUsageDescription": "GotBotNovel 需要在您选择时从“桌面”文件夹导入或导出内容。"
+      }
     },
     "dmg": {
-      "title": "GotBotNovel"
+      "title": "GotBotNovel ${version}",
+      "contents": [
+        {
+          "x": 140,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 500,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 320,
+          "y": 400,
+          "type": "file",
+          "path": "resources/macos/macOS-首次运行与权限说明.html"
+        }
+      ],
+      "window": {
+        "width": 640,
+        "height": 520
+      }
     }
   }
 }

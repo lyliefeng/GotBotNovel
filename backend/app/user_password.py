@@ -59,22 +59,24 @@ class UserPasswordManager:
         legacy_hash = hashlib.sha256(password.encode()).hexdigest()
         return hmac.compare_digest(legacy_hash, stored_hash)
     
-    async def set_password(self, user_id: str, username: str, password: Optional[str] = None) -> str:
-        """
-        设置用户密码
-        
-        Args:
-            user_id: 用户ID
-            username: 用户名
-            password: 密码，如果为None则使用默认密码（username+@666）
-            
-        Returns:
-            实际使用的密码（明文，仅用于首次设置时返回给用户）
-        """
+    @staticmethod
+    def generate_random_password() -> str:
+        """生成适合首次登录使用的高强度随机密码。"""
+        return secrets.token_urlsafe(18)
+
+    async def set_password(
+        self,
+        user_id: str,
+        username: str,
+        password: Optional[str] = None,
+        *,
+        has_custom_password: Optional[bool] = None,
+    ) -> str:
+        """设置用户密码；未提供密码时生成随机临时密码。"""
         from app.models.user import UserPassword as UserPasswordModel
-        
-        # 如果没有提供密码，使用默认密码
-        actual_password = password if password else f"{username}@666"
+
+        actual_password = password or self.generate_random_password()
+        is_custom = password is not None if has_custom_password is None else has_custom_password
         
         async with await self._get_session() as session:
             # 查询密码记录是否存在
@@ -87,7 +89,7 @@ class UserPasswordManager:
                 # 更新现有密码
                 pwd_record.username = username
                 pwd_record.password_hash = self._hash_password(actual_password)
-                pwd_record.has_custom_password = password is not None
+                pwd_record.has_custom_password = is_custom
                 pwd_record.updated_at = datetime.now()
             else:
                 # 创建新密码记录
@@ -95,7 +97,7 @@ class UserPasswordManager:
                     user_id=user_id,
                     username=username,
                     password_hash=self._hash_password(actual_password),
-                    has_custom_password=password is not None,
+                    has_custom_password=is_custom,
                     created_at=datetime.now(),
                     updated_at=datetime.now()
                 )
@@ -105,6 +107,58 @@ class UserPasswordManager:
             
             return actual_password
     
+    async def update_credentials(self, user_id: str, username: str, password: str) -> None:
+        """原子更新用户登录账号和密码。"""
+        from app.models.user import User as UserModel, UserPassword as UserPasswordModel
+
+        normalized_username = username.strip()
+        async with await self._get_session() as session:
+            duplicate_user = await session.execute(
+                select(UserModel).where(
+                    UserModel.username == normalized_username,
+                    UserModel.user_id != user_id,
+                )
+            )
+            duplicate_password = await session.execute(
+                select(UserPasswordModel).where(
+                    UserPasswordModel.username == normalized_username,
+                    UserPasswordModel.user_id != user_id,
+                )
+            )
+            if duplicate_user.scalar_one_or_none() or duplicate_password.scalar_one_or_none():
+                raise ValueError("账号已存在")
+
+            user_result = await session.execute(
+                select(UserModel).where(UserModel.user_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if not user:
+                raise ValueError("用户不存在")
+
+            password_result = await session.execute(
+                select(UserPasswordModel).where(UserPasswordModel.user_id == user_id)
+            )
+            password_record = password_result.scalar_one_or_none()
+            if not password_record:
+                password_record = UserPasswordModel(
+                    user_id=user_id,
+                    username=normalized_username,
+                    password_hash=self._hash_password(password),
+                    has_custom_password=True,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                session.add(password_record)
+            else:
+                password_record.username = normalized_username
+                password_record.password_hash = self._hash_password(password)
+                password_record.has_custom_password = True
+                password_record.updated_at = datetime.now()
+
+            user.username = normalized_username
+            user.last_login = datetime.now()
+            await session.commit()
+
     async def verify_password(self, user_id: str, password: str) -> bool:
         """
         验证用户密码

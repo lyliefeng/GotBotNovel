@@ -24,7 +24,7 @@ import SkillChat from './pages/SkillChat';
 import SkillManage from './pages/SkillManage';
 // import Polish from './pages/Polish';
 import Login from './pages/Login';
-import AuthCallback from './pages/AuthCallback';
+import CredentialSetup from './pages/CredentialSetup';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppFooter from './components/AppFooter';
 import SpringFestival from './components/SpringFestival';
@@ -43,7 +43,7 @@ function App() {
       >
         <Routes>
           <Route path="/login" element={<><Login /><AppFooter /></>} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/setup" element={<CredentialSetup />} />
 
           <Route path="/" element={<ProtectedRoute><><ProjectList /><AppFooter sidebarWidth={220} /></></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><><ProjectList /><AppFooter sidebarWidth={220} /></></ProtectedRoute>} />

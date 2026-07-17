@@ -204,8 +204,6 @@ DEFAULT_MAX_TOKENS=4096
 
 # 本地登录账号
 LOCAL_AUTH_ENABLED=True
-LOCAL_AUTH_USERNAME=admin
-LOCAL_AUTH_PASSWORD=admin123
 LOCAL_AUTH_DISPLAY_NAME=Admin
 ENVEOF
 # 替换占位符路径为实际 $HOME 路径
@@ -353,7 +351,7 @@ echo -e "${GREEN}║  查看日志:                                    ║${NC}"
 echo -e "${GREEN}║    tail -f ~/gotbotnovel/logs/app.log         ║${NC}"
 echo -e "${GREEN}║                                              ║${NC}"
 echo -e "${GREEN}║  🌐 访问: http://127.0.0.1:8000               ║${NC}"
-echo -e "${GREEN}║  🔑 账号: admin / admin123                    ║${NC}"
+echo -e "${GREEN}║  🔑 首次凭据将在启动日志中生成               ║${NC}"
 echo -e "${GREEN}║                                              ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 echo ""

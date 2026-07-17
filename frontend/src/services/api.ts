@@ -4,7 +4,6 @@ import { ssePost } from '../utils/sseClient';
 import type { SSEClientOptions } from '../utils/sseClient';
 import type {
   User,
-  AuthUrlResponse,
   Project,
   ProjectCreate,
   ProjectUpdate,
@@ -158,16 +157,12 @@ api.interceptors.response.use(
 export const authApi = {
   getAuthConfig: () => api.get<unknown, {
     local_auth_enabled: boolean;
-    linuxdo_enabled: boolean;
     email_auth_enabled: boolean;
     email_register_enabled: boolean;
   }>('/auth/config'),
 
   localLogin: (username: string, password: string) =>
-    api.post<unknown, { success: boolean; message: string; user: User }>('/auth/local/login', { username, password }),
-
-  bindAccountLogin: (username: string, password: string) =>
-    api.post<unknown, { success: boolean; message: string; user: User }>('/auth/bind/login', { username, password }),
+    api.post<unknown, { success: boolean; message: string; user: User; requires_credentials_update: boolean }>('/auth/local/login', { username, password }),
 
   emailLogin: (payload: import('../types').EmailLoginPayload) =>
     api.post<unknown, { success: boolean; message: string; user: User }>('/auth/email/login', payload),
@@ -181,7 +176,6 @@ export const authApi = {
   resetEmailPassword: (payload: import('../types').EmailResetPasswordPayload) =>
     api.post<unknown, { success: boolean; message: string }>('/auth/email/reset-password', payload),
 
-  getLinuxDOAuthUrl: () => api.get<unknown, AuthUrlResponse>('/auth/linuxdo/url'),
 
   getCurrentUser: () => api.get<unknown, User>('/auth/user'),
 
@@ -195,8 +189,8 @@ export const authApi = {
   setPassword: (password: string) =>
     api.post<unknown, { success: boolean; message: string }>('/auth/password/set', { password }),
 
-  initializePassword: (password: string) =>
-    api.post<unknown, { success: boolean; message: string }>('/auth/password/initialize', { password }),
+  updateCredentials: (username: string, password: string) =>
+    api.post<unknown, { success: boolean; message: string }>('/auth/credentials', { username, password }),
 
   refreshSession: () => api.post<unknown, { message: string; expire_at: number; remaining_minutes: number }>('/auth/refresh'),
 

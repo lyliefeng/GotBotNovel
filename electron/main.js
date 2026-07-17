@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog, shell } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
@@ -107,9 +107,46 @@ async function waitForBackend() {
   throw new Error(`后端在 ${HEALTH_TIMEOUT_MS}ms 内未通过健康检查: ${BACKEND_URL}/health`);
 }
 
+async function showMacOSPermissionNotice() {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+
+  const noticeFile = path.join(app.getPath('userData'), `macos-permission-notice-${app.getVersion()}`);
+  if (fs.existsSync(noticeFile)) {
+    return;
+  }
+
+  const result = await dialog.showMessageBox({
+    type: 'info',
+    title: 'macOS 权限提示',
+    message: '首次运行可能需要确认本地网络和文件夹访问权限',
+    detail: [
+      'GotBotNovel 会在本机 127.0.0.1 启动配套服务，macOS 如询问本地网络权限，请选择“允许”。',
+      '导入或导出文件到桌面、文稿或下载目录时，macOS 可能单独询问文件夹访问权限。',
+      '如果系统阻止打开应用，请前往“系统设置 → 隐私与安全性”，确认后选择“仍要打开”。',
+    ].join('\n\n'),
+    buttons: ['我知道了', '打开隐私与安全性设置'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+
+  try {
+    fs.writeFileSync(noticeFile, new Date().toISOString(), { mode: 0o600 });
+  } catch (error) {
+    console.warn(`[${APP_NAME}] 无法保存 macOS 权限提示状态:`, error);
+  }
+
+  if (result.response === 1) {
+    await shell.openExternal('x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension');
+  }
+}
+
 async function createWindow() {
   startBackend();
   await waitForBackend();
+  await showMacOSPermissionNotice();
 
   mainWindow = new BrowserWindow({
     width: 1440,

@@ -11,12 +11,14 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [requiresCredentialsUpdate, setRequiresCredentialsUpdate] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await authApi.getCurrentUser();
+        const user = await authApi.getCurrentUser();
+        setRequiresCredentialsUpdate(Boolean(user.requires_credentials_update));
         setIsAuthenticated(true);
         // 启动会话管理器
         sessionManager.start();
@@ -48,6 +50,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isAuthenticated) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+
+  if (requiresCredentialsUpdate) {
+    return <Navigate to={`/auth/setup?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
   return <>{children}</>;

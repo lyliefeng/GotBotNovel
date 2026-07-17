@@ -146,7 +146,7 @@ class SessionManager {
     
     const currentPath = window.location.pathname;
     // 如果已经在登录页或回调页，不显示错误提示
-    if (currentPath === '/login' || currentPath === '/auth/callback') {
+    if (currentPath === '/login' || currentPath === '/auth/setup') {
       return;
     }
     

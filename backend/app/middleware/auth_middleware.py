@@ -3,12 +3,28 @@
 支持来自其他实例的代理请求（提示词工坊功能）
 """
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.user_manager import user_manager
 from app.logger import get_logger
 from app.security import verify_session_token
+from app.user_password import password_manager
 
 logger = get_logger(__name__)
+
+
+FIRST_LOGIN_ALLOWED_PATHS = {
+    "/api/auth/config",
+    "/api/auth/local/login",
+    "/api/auth/email/login",
+    "/api/auth/email/register",
+    "/api/auth/email/reset-password",
+    "/api/auth/email/send-code",
+    "/api/auth/user",
+    "/api/auth/credentials",
+    "/api/auth/logout",
+    "/api/auth/refresh",
+}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -31,6 +47,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             
             request.state.is_proxy_request = True
             request.state.proxy_instance_id = instance_id
+            request.state.requires_credentials_update = False
             
             if header_user_id:
                 # 有用户标识，使用代理的用户信息
@@ -46,6 +63,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # 本地请求或非工坊路径，使用 Cookie 认证
             request.state.is_proxy_request = False
             request.state.proxy_instance_id = None
+            request.state.requires_credentials_update = False
             
             # 优先验证签名会话 Cookie；不再信任客户端可伪造的明文 user_id。
             user_id = verify_session_token(request.cookies.get("session_token"))
@@ -65,6 +83,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         request.state.user_id = user_id
                         request.state.user = user
                         request.state.is_admin = user.is_admin
+                        if request.url.path.startswith("/api/"):
+                            request.state.requires_credentials_update = (
+                                not await password_manager.has_custom_password(user_id)
+                            )
                 else:
                     # 用户不存在，清除状态
                     request.state.user_id = None
@@ -76,6 +98,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.user = None
                 request.state.is_admin = False
         
+        if (
+            request.state.requires_credentials_update
+            and request.url.path.startswith("/api/")
+            and request.url.path not in FIRST_LOGIN_ALLOWED_PATHS
+        ):
+            return JSONResponse(
+                status_code=428,
+                content={"detail": "首次登录必须先设置自己的账号和密码"},
+            )
+
         # 继续处理请求
         response = await call_next(request)
         return response

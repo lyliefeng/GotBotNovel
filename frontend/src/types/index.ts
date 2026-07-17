@@ -9,6 +9,7 @@ export interface User {
   linuxdo_id: string;
   created_at: string;
   last_login: string;
+  requires_credentials_update?: boolean;
 }
 
 export interface EmailLoginPayload {
@@ -144,12 +145,6 @@ export interface PresetListResponse {
   total: number;
   active_preset_id?: string;
   chapter_analysis_preset_id?: string;
-}
-
-// LinuxDO 授权 URL 响应
-export interface AuthUrlResponse {
-  auth_url: string;
-  state: string;
 }
 
 // 项目类型定义

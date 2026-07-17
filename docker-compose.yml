@@ -62,6 +62,7 @@ services:
       - "${APP_PORT:-8000}:8000"
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
       - ./storage/generated_covers:/app/storage/generated_covers
       - ./.env:/app/.env:ro
     environment:
@@ -108,17 +109,8 @@ services:
       - DEFAULT_TEMPERATURE=${DEFAULT_TEMPERATURE:-0.7}
       - DEFAULT_MAX_TOKENS=${DEFAULT_MAX_TOKENS:-32000}
       
-      # LinuxDO OAuth 配置
-      - LINUXDO_CLIENT_ID=${LINUXDO_CLIENT_ID:-11111}
-      - LINUXDO_CLIENT_SECRET=${LINUXDO_CLIENT_SECRET:-11111}
-      - LINUXDO_REDIRECT_URI=${LINUXDO_REDIRECT_URI:-http://localhost:8000/api/auth/linuxdo/callback}
-      - LINUXDO_PROXY_URL=${LINUXDO_PROXY_URL:-}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8000}
-      
       # 本地账户登录配置
       - LOCAL_AUTH_ENABLED=${LOCAL_AUTH_ENABLED:-true}
-      - LOCAL_AUTH_USERNAME=${LOCAL_AUTH_USERNAME:-admin}
-      - LOCAL_AUTH_PASSWORD=${LOCAL_AUTH_PASSWORD:-admin123}
       - LOCAL_AUTH_DISPLAY_NAME=${LOCAL_AUTH_DISPLAY_NAME:-本地管理员}
       
       # 会话配置

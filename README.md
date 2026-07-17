@@ -23,7 +23,7 @@
 - 👥 **角色管理** - 人物关系、组织架构可视化管理
 - 📖 **章节编辑** - 支持创建、编辑、重新生成和润色
 - 🌐 **世界观设定** - 构建完整的故事背景
-- 🔐 **多种登录** - LinuxDO OAuth 或本地账户登录
+- 🔐 **安全登录** - 本地账户首次部署生成随机临时凭据，也支持邮箱认证
 - 💾 **SQLite 默认存储** - 本地无需额外数据库服务
 - 🐘 **PostgreSQL 可选** - 适合多用户部署
 - 🐳 **Docker 部署** - 可从源码构建运行
@@ -66,7 +66,7 @@
 - [x] **章节字数限制** - 用户可设置生成字数
 - [x] **思维链与章节关系图谱** - 可视化章节逻辑关系
 - [x] **根据分析一键重写** - 根据分析建议重新生成
-- [x] **Linux DO 自动创建账号** - OAuth 登录自动生成账号
+- [x] **首次登录安全初始化** - 自动生成随机临时管理员，登录后强制设置自己的账号密码
 - [x] **职业等级体系** - 自定义职业和等级系统，支持修仙境界、魔法等级等多种体系
 - [x] **角色/组织卡片导入导出** - 单独导出角色和组织卡片，支持跨项目数据共享
 - [x] **伏笔管理** - 智能追踪剧情伏笔，提醒未回收线索，可视化伏笔时间线
@@ -289,16 +289,8 @@ services:
       - DEFAULT_MODEL=${DEFAULT_MODEL:-gpt-4o-mini}
       - DEFAULT_TEMPERATURE=${DEFAULT_TEMPERATURE:-0.7}
       - DEFAULT_MAX_TOKENS=${DEFAULT_MAX_TOKENS:-32000}
-      # LinuxDO OAuth 配置
-      - LINUXDO_CLIENT_ID=${LINUXDO_CLIENT_ID:-11111}
-      - LINUXDO_CLIENT_SECRET=${LINUXDO_CLIENT_SECRET:-11111}
-      - LINUXDO_REDIRECT_URI=${LINUXDO_REDIRECT_URI:-http://localhost:8000/api/auth/linuxdo/callback}
-      - LINUXDO_PROXY_URL=${LINUXDO_PROXY_URL:-}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8000}
       # 本地账户登录配置
       - LOCAL_AUTH_ENABLED=${LOCAL_AUTH_ENABLED:-true}
-      - LOCAL_AUTH_USERNAME=${LOCAL_AUTH_USERNAME:-admin}
-      - LOCAL_AUTH_PASSWORD=${LOCAL_AUTH_PASSWORD:-admin123}
       - LOCAL_AUTH_DISPLAY_NAME=${LOCAL_AUTH_DISPLAY_NAME:-本地管理员}
       # 会话配置
       - SESSION_EXPIRE_MINUTES=${SESSION_EXPIRE_MINUTES:-120}
@@ -405,20 +397,13 @@ DEFAULT_MODEL=gpt-4o-mini
 
 # 本地账户登录
 LOCAL_AUTH_ENABLED=true
-LOCAL_AUTH_USERNAME=admin
-LOCAL_AUTH_PASSWORD=your_password
+# 首次部署会自动生成随机临时管理员凭据。
+# 查看服务启动日志或 data/initial_admin_credentials.json。
 ```
 
 ### 可选配置
 
 ```bash
-# LinuxDO OAuth
-LINUXDO_CLIENT_ID=your_client_id
-LINUXDO_CLIENT_SECRET=your_client_secret
-LINUXDO_REDIRECT_URI=http://localhost:8000/api/auth/callback
-# LinuxDO 登录专用代理（可选，仅影响 OAuth token 与用户信息请求）
-LINUXDO_PROXY_URL=http://127.0.0.1:7890
-
 # PostgreSQL 连接池（高并发优化）
 DATABASE_POOL_SIZE=30
 DATABASE_MAX_OVERFLOW=20
@@ -434,13 +419,6 @@ SESSION_COOKIE_SECURE=true
 > - HTTP 部署：如果登录后浏览器没有保存 Cookie，请在 `.env` 中设置 `SESSION_COOKIE_SECURE=false`，然后重启后端或 Docker 容器。
 > - Docker Compose 示例默认使用 `SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}`，如需关闭必须在 `.env` 中显式配置。
 >
-> **🌐 LinuxDO 专用代理说明**
->
-> - 如果只有 LinuxDO 授权登录在当前网络不可达，优先配置 `LINUXDO_PROXY_URL`，不要配置全局 `HTTP_PROXY` / `HTTPS_PROXY`。
-> - `LINUXDO_PROXY_URL` 只会用于 LinuxDO OAuth 的 token 交换和用户信息请求，不影响 AI 服务、SMTP、数据库等其他网络调用。
-> - 常见示例：`LINUXDO_PROXY_URL=http://127.0.0.1:7890`；Docker 容器内访问宿主机代理时通常需要使用宿主机在 Docker 网络中的地址，而不是容器内的 `127.0.0.1`。
-> - 当前示例按 HTTP 代理配置；如果需要 SOCKS 代理，请先确保运行环境安装了 httpx 的 SOCKS 支持依赖。
-
 ### 中转 API 配置
 
 支持所有 OpenAI 兼容格式的中转服务：
@@ -552,7 +530,7 @@ GotBotNovel/
 
 ## 📖 使用指南
 
-1. **登录系统** - 使用本地账户或 LinuxDO 账户
+1. **登录系统** - 首次部署使用随机临时管理员登录，并立即设置自己的账号密码
 2. **创建项目** - 选择"使用向导创建"
 3. **AI 生成** - 输入基本信息，AI 自动生成大纲和角色
 4. **编辑完善** - 管理角色关系，生成和编辑章节

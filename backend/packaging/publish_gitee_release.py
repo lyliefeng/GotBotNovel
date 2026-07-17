@@ -196,19 +196,23 @@ def _sync_attachments(
                 print(f"删除不再需要的附件: {name}")
                 publisher.delete_attachment(release_id, int(old["id"]))
 
+    if replace_existing:
+        # 先一次性删除所有同名旧附件，再开始上传。这样中断后可不带本参数
+        # 重试：已上传的新附件会按大小保留，其余附件仍保持缺失并继续上传。
+        for name in desired:
+            old = existing.pop(name, None)
+            if old:
+                print(f"删除同版本重发的已有附件: {name}")
+                publisher.delete_attachment(release_id, int(old["id"]))
+
     for name, path in desired.items():
         old = existing.get(name)
         expected_size = path.stat().st_size
-        if (
-            old
-            and not replace_existing
-            and int(old.get("size", -1)) == expected_size
-        ):
+        if old and int(old.get("size", -1)) == expected_size:
             print(f"保留已有附件: {name} ({expected_size} bytes)")
             continue
         if old:
-            reason = "同版本重发" if replace_existing else "大小不匹配"
-            print(f"删除{reason}的已有附件: {name}")
+            print(f"删除大小不匹配的已有附件: {name}")
             publisher.delete_attachment(release_id, int(old["id"]))
         print(f"上传附件: {name} ({expected_size} bytes)")
         uploaded = publisher.upload_attachment(release_id, path)

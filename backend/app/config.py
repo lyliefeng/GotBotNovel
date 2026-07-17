@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     # 桌面自动更新（Gitee Release）
     DESKTOP_UPDATE_ENABLED: bool = True
     DESKTOP_UPDATE_GITEE_API_BASE: str = "https://gitee.com/api/v5"
-    DESKTOP_UPDATE_GITEE_OWNER: str = "lyliefeng"
+    DESKTOP_UPDATE_GITEE_OWNER: str = "lv-liefeng"
     DESKTOP_UPDATE_GITEE_REPO: str = "GotBotNovel"
     DESKTOP_UPDATE_ALLOWED_DOWNLOAD_HOSTS: list[str] = ["gitee.com"]
     DESKTOP_UPDATE_CACHE_SECONDS: int = 300

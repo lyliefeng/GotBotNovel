@@ -45,7 +45,7 @@ function backendEnvironment() {
     DESKTOP_UPDATE_GITEE_API_BASE:
       process.env.DESKTOP_UPDATE_GITEE_API_BASE || UPDATE_CONFIG.giteeApiBase || 'https://gitee.com/api/v5',
     DESKTOP_UPDATE_GITEE_OWNER:
-      process.env.DESKTOP_UPDATE_GITEE_OWNER || UPDATE_CONFIG.giteeOwner || 'lyliefeng',
+      process.env.DESKTOP_UPDATE_GITEE_OWNER || UPDATE_CONFIG.giteeOwner || 'lv-liefeng',
     DESKTOP_UPDATE_GITEE_REPO:
       process.env.DESKTOP_UPDATE_GITEE_REPO || UPDATE_CONFIG.giteeRepo || 'GotBotNovel',
   };

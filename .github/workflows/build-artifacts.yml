@@ -99,7 +99,7 @@ jobs:
       - name: Configure Gitee desktop update source
         shell: bash
         env:
-          GITEE_OWNER: ${{ vars.GITEE_OWNER || 'lyliefeng' }}
+          GITEE_OWNER: ${{ vars.GITEE_OWNER || 'lv-liefeng' }}
           GITEE_REPO: ${{ vars.GITEE_REPO || 'GotBotNovel' }}
         run: node electron/configure-update-source.js "$GITEE_OWNER" "$GITEE_REPO"
 
@@ -262,7 +262,7 @@ jobs:
       - name: Publish Gitee Release attachments
         env:
           GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
-          GITEE_OWNER: ${{ vars.GITEE_OWNER || 'lyliefeng' }}
+          GITEE_OWNER: ${{ vars.GITEE_OWNER || 'lv-liefeng' }}
           GITEE_REPO: ${{ vars.GITEE_REPO || 'GotBotNovel' }}
           GITEE_TARGET: ${{ vars.GITEE_TARGET || 'main' }}
         run: |

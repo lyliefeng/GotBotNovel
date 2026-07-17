@@ -8,6 +8,7 @@ import yaml
 
 from app.api.desktop_updates import (
     ReleaseBundle,
+    _api_url,
     _parse_range,
     _update_yaml,
     _validate_manifest,
@@ -50,6 +51,13 @@ def sample_manifest() -> dict:
             },
         },
     }
+
+
+def test_default_gitee_release_url_uses_public_repository():
+    assert (
+        _api_url("releases/latest")
+        == "https://gitee.com/api/v5/repos/lv-liefeng/GotBotNovel/releases/latest"
+    )
 
 
 def test_validate_manifest_and_render_windows_channel():

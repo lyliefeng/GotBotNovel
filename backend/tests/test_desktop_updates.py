@@ -246,3 +246,46 @@ def test_get_or_create_release_treats_http_200_null_as_missing():
 
     assert release == {"id": 9, "tag_name": "v1.0.2"}
     assert [call[0] for call in calls] == ["GET", "POST"]
+
+
+def test_publish_keeps_existing_attachment_with_matching_size(tmp_path: Path, monkeypatch):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    part = assets / "artifact.part000"
+    part.write_bytes(b"already-uploaded")
+    manifest = assets / "gotbotnovel-update.json"
+    manifest.write_text("{}", encoding="utf-8")
+    events = []
+
+    class FakePublisher:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_or_create_release(self, **kwargs):
+            return {"id": 7}
+
+        def list_attachments(self, release_id):
+            return [{"id": 11, "name": part.name, "size": part.stat().st_size}]
+
+        def delete_attachment(self, release_id, attachment_id):
+            events.append(("delete", attachment_id))
+
+        def upload_attachment(self, release_id, path):
+            events.append(("upload", path.name))
+            return {"name": path.name}
+
+        def close(self):
+            events.append(("close", None))
+
+    monkeypatch.setattr(_publish_module, "GiteePublisher", FakePublisher)
+    _publish_module.publish(
+        assets_dir=assets,
+        token="token",
+        owner="owner",
+        repo="repo",
+        tag="v1.0.2",
+        target="main",
+        api_base="https://gitee.com/api/v5",
+    )
+
+    assert events == [("upload", manifest.name), ("close", None)]

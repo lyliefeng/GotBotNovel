@@ -156,10 +156,14 @@ def publish(
 
         for path in paths:
             old = existing.get(path.name)
+            expected_size = path.stat().st_size
+            if old and int(old.get("size", -1)) == expected_size:
+                print(f"保留已有附件: {path.name} ({expected_size} bytes)")
+                continue
             if old:
-                print(f"删除已有附件: {path.name}")
+                print(f"删除大小不匹配的已有附件: {path.name}")
                 publisher.delete_attachment(release_id, int(old["id"]))
-            print(f"上传附件: {path.name} ({path.stat().st_size} bytes)")
+            print(f"上传附件: {path.name} ({expected_size} bytes)")
             uploaded = publisher.upload_attachment(release_id, path)
             print(f"上传完成: {uploaded.get('name', path.name)}")
     finally:

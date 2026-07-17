@@ -1,6 +1,6 @@
 {
   "name": "gotbotnovel-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "GotBotNovel cross-platform desktop application",
   "main": "main.js",

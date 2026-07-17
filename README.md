@@ -16,18 +16,6 @@
 
 ---
 
-<div align="center">
-
-## 💬 加入交流群
-
-欢迎扫码加入 QQ 交流群，一起交流 AI 小说创作心得、反馈问题、获取最新动态！
-
-<img src="frontend/public/qq.jpg" alt="QQ交流群二维码" width="300" />
-
-</div>
-
----
-
 ## ✨ 特性
 
 - 🤖 **多 AI 模型** - 支持 OpenAI、Gemini、Claude 等主流模型
@@ -189,7 +177,7 @@ docker-compose up -d
 >
 > 1. **`.env` 文件挂载**: `docker-compose.yml` 会自动将 `.env` 挂载到容器，确保文件存在
 > 2. **数据库初始化**: `init_postgres.sql` 会在首次启动时自动执行，安装必要的PostgreSQL扩展
-> 3. **自行构建**: 如需从源码构建，请先下载 embedding 模型文件（[加群获取](frontend/public/qq.jpg)）
+> 3. **自行构建**: Docker 构建过程会从 Hugging Face 自动下载 embedding 模型，请确保构建环境能够访问模型仓库
 
 ### 从源码构建 Docker 镜像
 
@@ -360,10 +348,8 @@ docker-compose up -d
 # 模型文件较大（约 400MB），需放置到以下目录：
 # backend/embedding/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2/
 #
-# 📥 获取方式：
-# - 加入项目 QQ 群或 Linux DO 讨论区获取下载链接
-# - 群号：见项目主页
-# - Linux DO：https://linux.do/t/topic/1100112
+# 📥 获取方式：首次运行时由 sentence-transformers 自动下载，
+# 或使用 backend/packaging/download_embedding_model.py 下载桌面离线模型。
 ```
 
 #### 后端
@@ -615,9 +601,6 @@ GotBotNovel/
 ## 📧 联系方式
 
 - 提交 [Issue](https://github.com/lyliefeng/GotBotNovel/issues)
-- Linux DO [讨论](https://linux.do/t/topic/1106333)
-- 加入QQ群 [QQ群](frontend/public/qq.jpg)
-- 加入WX群 [WX群](frontend/public/WX.png)
 
 ---
 
